@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { PlayCircle, Terminal, CheckCircle2, AlertCircle, RefreshCw, Zap, Sparkles } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { PlayCircle, Terminal, CheckCircle2, AlertCircle, RefreshCw, Zap, Sparkles, Server } from 'lucide-react';
 import { Feature, FeatureQualifier, FeatureRule, EvaluationResult } from '../types/domain';
 import { evaluateFeature } from '../services/mockData';
+import { evaluationService } from '../services/evaluationService';
 
 interface EvaluationSimulatorProps {
   features: Feature[];
@@ -23,6 +24,13 @@ export const EvaluationSimulator: React.FC<EvaluationSimulatorProps> = ({
     projectFeatures.length > 0 ? projectFeatures[0].code : ''
   );
 
+  // Update selected feature code when project changes
+  useEffect(() => {
+    if (projectFeatures.length > 0 && !projectFeatures.some((f) => f.code === selectedFeatureCode)) {
+      setSelectedFeatureCode(projectFeatures[0].code);
+    }
+  }, [projectId, projectFeatures, selectedFeatureCode]);
+
   // Dynamic context map for qualifiers
   const [requestContext, setRequestContext] = useState<Record<string, string>>({
     USER_ID: 'usr_alpha_99',
@@ -31,6 +39,11 @@ export const EvaluationSimulator: React.FC<EvaluationSimulatorProps> = ({
     APP_VERSION: '2.4.0',
     AGREEMENT_NO: 'AGR-PREMIUM-77',
   });
+
+  const [useBackendEngine, setUseBackendEngine] = useState<boolean>(true);
+  const [backendResult, setBackendResult] = useState<EvaluationResult | null>(null);
+  const [backendError, setBackendError] = useState<string | null>(null);
+  const [isEvaluating, setIsEvaluating] = useState<boolean>(false);
 
   const handleContextChange = (qualifierCode: string, value: string) => {
     setRequestContext((prev) => ({
@@ -43,13 +56,79 @@ export const EvaluationSimulator: React.FC<EvaluationSimulatorProps> = ({
     setRequestContext({});
   };
 
-  // Evaluate selected feature
+  // Client-side local evaluation (always available as baseline / fallback)
   const currentFeature = projectFeatures.find((f) => f.code === selectedFeatureCode);
-  const currentResult: EvaluationResult | null = currentFeature
+  const clientResult: EvaluationResult | null = currentFeature
     ? evaluateFeature(currentFeature, rules, qualifiers, requestContext)
     : null;
 
-  // Evaluate all features in project
+  // Evaluate via backend when selectedFeatureCode or requestContext changes and backend engine is enabled
+  useEffect(() => {
+    if (!useBackendEngine || !selectedFeatureCode) {
+      setBackendResult(null);
+      setBackendError(null);
+      return;
+    }
+
+    let isMounted = true;
+    const runBackendEvaluation = async () => {
+      setIsEvaluating(true);
+      setBackendError(null);
+      try {
+        const resp = await evaluationService.evaluateFeature({
+          featureCode: selectedFeatureCode,
+          projectId,
+          requestContext,
+        });
+
+        if (isMounted) {
+          const matchedRuleId = resp.matchingRuleId;
+          const matchingQualifier = resp.matchingQualifierCode
+            ? qualifiers.find((q) => q.code === resp.matchingQualifierCode)
+            : undefined;
+
+          setBackendResult({
+            featureCode: resp.featureCode,
+            featureName: resp.featureName || currentFeature?.name || selectedFeatureCode,
+            resolvedValue: resp.resolvedValue,
+            source: resp.source === 'RULE_MATCH' ? 'RULE_MATCH' : 'DEFAULT_VALUE',
+            matchingRule: matchedRuleId
+              ? {
+                  ruleId: matchedRuleId,
+                  qualifierCode: resp.matchingQualifierCode || '',
+                  qualifierPriority: matchingQualifier?.priority ?? 0,
+                  expectedValue: rules.find((r) => r.id === matchedRuleId)?.qualifierValue || '',
+                  receivedValue: requestContext[resp.matchingQualifierCode || ''] || '',
+                }
+              : undefined,
+            evaluationLog: resp.logs || [],
+          });
+        }
+      } catch (err: any) {
+        if (isMounted) {
+          setBackendError(err.message || 'Failed to evaluate via backend');
+          setBackendResult(null);
+        }
+      } finally {
+        if (isMounted) {
+          setIsEvaluating(false);
+        }
+      }
+    };
+
+    const timer = setTimeout(runBackendEvaluation, 200);
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [selectedFeatureCode, projectId, requestContext, useBackendEngine, qualifiers, rules, currentFeature]);
+
+  // Active displayed result: backend result if available, otherwise clientResult
+  const activeResult: EvaluationResult | null = (useBackendEngine && backendResult)
+    ? backendResult
+    : clientResult;
+
+  // Evaluate all features in project (client side overview)
   const allResults: EvaluationResult[] = projectFeatures.map((f) =>
     evaluateFeature(f, rules, qualifiers, requestContext)
   );
@@ -67,11 +146,43 @@ export const EvaluationSimulator: React.FC<EvaluationSimulatorProps> = ({
           </p>
         </div>
 
-        <button className="btn btn-secondary" onClick={handleResetContext}>
-          <RefreshCw size={16} />
-          Clear Context
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <button
+            className={`btn ${useBackendEngine ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+            onClick={() => setUseBackendEngine(!useBackendEngine)}
+            title="Toggle between Spring Boot Backend Engine and Local Client Engine"
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem' }}
+          >
+            <Server size={14} />
+            Engine: {useBackendEngine ? 'Backend REST API' : 'Local Client (mockData)'}
+          </button>
+
+          <button className="btn btn-secondary btn-sm" onClick={handleResetContext}>
+            <RefreshCw size={14} />
+            Clear Context
+          </button>
+        </div>
       </div>
+
+      {backendError && useBackendEngine && (
+        <div
+          style={{
+            padding: '0.6rem 1rem',
+            marginBottom: '1rem',
+            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+            border: '1px solid rgba(245, 158, 11, 0.3)',
+            borderRadius: 'var(--radius-md)',
+            color: '#f59e0b',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            fontSize: '0.85rem',
+          }}
+        >
+          <AlertCircle size={16} />
+          <span>Backend evaluation notice: {backendError}. Falling back to client-side evaluation engine.</span>
+        </div>
+      )}
 
       <div className="simulator-layout">
         {/* Left column: Incoming Request Context */}
@@ -126,6 +237,7 @@ export const EvaluationSimulator: React.FC<EvaluationSimulatorProps> = ({
               <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.05rem' }}>
                 <Sparkles size={18} color="var(--accent-primary)" />
                 Live Feature Evaluation
+                {isEvaluating && <span style={{ fontSize: '0.75rem', color: 'var(--accent-primary)' }}>(Evaluating...)</span>}
               </h3>
 
               <select
@@ -142,34 +254,34 @@ export const EvaluationSimulator: React.FC<EvaluationSimulatorProps> = ({
               </select>
             </div>
 
-            {currentResult && (
+            {activeResult && (
               <div
                 className={`result-card ${
-                  currentResult.source === 'RULE_MATCH'
+                  activeResult.source === 'RULE_MATCH'
                     ? 'matched'
-                    : currentResult.source === 'DEFAULT_VALUE'
+                    : activeResult.source === 'DEFAULT_VALUE'
                     ? 'default'
                     : 'disabled'
                 }`}
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    {currentResult.source === 'RULE_MATCH' ? (
+                    {activeResult.source === 'RULE_MATCH' ? (
                       <CheckCircle2 size={20} color="var(--accent-emerald)" />
                     ) : (
                       <AlertCircle size={20} color="var(--accent-amber)" />
                     )}
-                    <strong>{currentResult.featureName}</strong>
+                    <strong>{activeResult.featureName}</strong>
                   </div>
 
                   <span
                     className={`qualifier-pill ${
-                      currentResult.source === 'RULE_MATCH' ? 'boolean' : 'text'
+                      activeResult.source === 'RULE_MATCH' ? 'boolean' : 'text'
                     }`}
                   >
-                    {currentResult.source === 'RULE_MATCH'
+                    {activeResult.source === 'RULE_MATCH'
                       ? 'Rule Override Matched'
-                      : currentResult.source === 'DEFAULT_VALUE'
+                      : activeResult.source === 'DEFAULT_VALUE'
                       ? 'Default Fallback'
                       : 'Disabled'}
                   </span>
@@ -184,14 +296,18 @@ export const EvaluationSimulator: React.FC<EvaluationSimulatorProps> = ({
                     style={{
                       fontSize: '1rem',
                       fontWeight: 700,
-                      color: currentResult.source === 'RULE_MATCH' ? '#34d399' : '#818cf8',
+                      color: activeResult.source === 'RULE_MATCH' ? '#34d399' : '#818cf8',
                     }}
                   >
-                    {currentResult.resolvedValue}
+                    {activeResult.resolvedValue}
+                  </span>
+
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>
+                    Source: {useBackendEngine && backendResult ? 'Backend Engine (/api/evaluations)' : 'Local Evaluator'}
                   </span>
                 </div>
 
-                {currentResult.matchingRule && (
+                {activeResult.matchingRule && (
                   <div
                     style={{
                       fontSize: '0.8rem',
@@ -201,10 +317,10 @@ export const EvaluationSimulator: React.FC<EvaluationSimulatorProps> = ({
                       borderRadius: 'var(--radius-sm)',
                     }}
                   >
-                    Matched by <strong>Rule #{currentResult.matchingRule.ruleId}</strong> on qualifier{' '}
-                    <code>{currentResult.matchingRule.qualifierCode}</code> (priority{' '}
-                    {currentResult.matchingRule.qualifierPriority}) with value "
-                    <strong>{currentResult.matchingRule.receivedValue}</strong>"
+                    Matched by <strong>Rule #{activeResult.matchingRule.ruleId}</strong> on qualifier{' '}
+                    <code>{activeResult.matchingRule.qualifierCode}</code> (priority{' '}
+                    {activeResult.matchingRule.qualifierPriority}) with value "
+                    <strong>{activeResult.matchingRule.receivedValue}</strong>"
                   </div>
                 )}
               </div>
@@ -225,11 +341,11 @@ export const EvaluationSimulator: React.FC<EvaluationSimulatorProps> = ({
                 }}
               >
                 <Terminal size={14} />
-                Execution Trace & Decision Log
+                Execution Trace & Decision Log ({useBackendEngine && backendResult ? 'Spring Boot EvaluationController' : 'Client Simulator'})
               </div>
 
               <div className="log-console">
-                {currentResult?.evaluationLog.map((log, index) => {
+                {activeResult?.evaluationLog.map((log, index) => {
                   const isMatch = log.includes('>> MATCH FOUND');
                   return (
                     <div key={index} className={`log-line ${isMatch ? 'match' : ''}`}>
