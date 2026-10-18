@@ -1,6 +1,9 @@
 # Ignore all dotfiles and dotfolders
 .*
 !.gitignore
+# Claude Code project config (local overrides stay ignored)
+!.claude/
+.claude/settings.local.json
 target/
 pom.xml.tag
 pom.xml.releaseBackup
