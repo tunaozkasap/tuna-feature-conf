@@ -19,6 +19,7 @@ public class EvaluationDto {
     public static class Request {
         private String featureCode;
         private Long projectId;
+        private String environmentCode;
         @Builder.Default
         private Map<String, String> requestContext = new HashMap<>();
     }
@@ -30,6 +31,7 @@ public class EvaluationDto {
     public static class Response {
         private String featureCode;
         private String featureName;
+        private String environmentCode;
         private String resolvedValue;
         private String source;
         private Long matchingRuleId;

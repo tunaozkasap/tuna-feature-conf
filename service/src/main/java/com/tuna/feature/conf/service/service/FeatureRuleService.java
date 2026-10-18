@@ -6,9 +6,11 @@ import com.tuna.feature.conf.model.dto.FeatureRuleDto;
 import com.tuna.feature.conf.model.dto.FeatureRuleDto.CreateRequest;
 import com.tuna.feature.conf.model.dto.FeatureRuleDto.Response;
 import com.tuna.feature.conf.model.dto.FeatureRuleDto.UpdateRequest;
+import com.tuna.feature.conf.persistence.entity.EnvironmentEntity;
 import com.tuna.feature.conf.persistence.entity.FeatureEntity;
 import com.tuna.feature.conf.persistence.entity.FeatureQualifierEntity;
 import com.tuna.feature.conf.persistence.entity.FeatureRuleEntity;
+import com.tuna.feature.conf.persistence.repository.EnvironmentRepository;
 import com.tuna.feature.conf.persistence.repository.FeatureQualifierRepository;
 import com.tuna.feature.conf.persistence.repository.FeatureRepository;
 import com.tuna.feature.conf.persistence.repository.FeatureRuleRepository;
@@ -22,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +34,7 @@ public class FeatureRuleService {
     private final FeatureRuleRepository ruleRepository;
     private final FeatureRepository featureRepository;
     private final FeatureQualifierRepository qualifierRepository;
+    private final EnvironmentRepository environmentRepository;
 
     @Transactional(readOnly = true)
     public CrudResponse<Response> search(CrudRequest<?> request) {
@@ -64,12 +68,17 @@ public class FeatureRuleService {
         FeatureEntity feature = featureRepository.findById(data.getFeatureId())
                 .orElseThrow(() -> new ResourceNotFoundException("Feature", "id", data.getFeatureId()));
 
+        EnvironmentEntity environment = environmentRepository.findById(data.getEnvironmentId())
+                .orElseThrow(() -> new ResourceNotFoundException("Environment", "id", data.getEnvironmentId()));
+
         FeatureQualifierEntity qualifier = qualifierRepository.findById(data.getQualifierId())
                 .orElseThrow(() -> new ResourceNotFoundException("FeatureQualifier", "id", data.getQualifierId()));
 
         FeatureRuleEntity entity = new FeatureRuleEntity();
         entity.setFeature(feature);
+        entity.setEnvironment(environment);
         entity.setQualifier(qualifier);
+        ensureSameProject(entity);
         entity.setQualifierValue(data.getQualifierValue());
         entity.setFeatureValue(data.getFeatureValue());
         entity.setPriority(data.getPriority() != null ? data.getPriority() : 0);
@@ -95,6 +104,11 @@ public class FeatureRuleService {
             FeatureEntity feature = featureRepository.findById(data.getFeatureId())
                     .orElseThrow(() -> new ResourceNotFoundException("Feature", "id", data.getFeatureId()));
             entity.setFeature(feature);
+        }
+        if (data.getEnvironmentId() != null) {
+            EnvironmentEntity environment = environmentRepository.findById(data.getEnvironmentId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Environment", "id", data.getEnvironmentId()));
+            entity.setEnvironment(environment);
         }
         if (data.getQualifierId() != null) {
             FeatureQualifierEntity qualifier = qualifierRepository.findById(data.getQualifierId())
@@ -123,6 +137,8 @@ public class FeatureRuleService {
             entity.setDescription(data.getDescription());
         }
 
+        ensureSameProject(entity);
+
         FeatureRuleEntity saved = ruleRepository.save(entity);
         return CrudResponse.of(toResponse(saved), "FeatureRule updated successfully");
     }
@@ -138,12 +154,25 @@ public class FeatureRuleService {
                 .build();
     }
 
+    private void ensureSameProject(FeatureRuleEntity entity) {
+        Long featureProjectId = entity.getFeature().getProject() != null ? entity.getFeature().getProject().getId() : null;
+        Long environmentProjectId = entity.getEnvironment().getProject().getId();
+        if (!Objects.equals(featureProjectId, environmentProjectId)) {
+            throw new IllegalArgumentException(String.format(
+                    "Environment '%s' belongs to project %s but feature '%s' belongs to project %s",
+                    entity.getEnvironment().getCode(), environmentProjectId,
+                    entity.getFeature().getCode(), featureProjectId));
+        }
+    }
+
     private Response toResponse(FeatureRuleEntity entity) {
         return Response.builder()
                 .id(entity.getId())
                 .featureId(entity.getFeature() != null ? entity.getFeature().getId() : null)
                 .featureCode(entity.getFeature() != null ? entity.getFeature().getCode() : null)
                 .featureName(entity.getFeature() != null ? entity.getFeature().getName() : null)
+                .environmentId(entity.getEnvironment() != null ? entity.getEnvironment().getId() : null)
+                .environmentCode(entity.getEnvironment() != null ? entity.getEnvironment().getCode() : null)
                 .qualifierId(entity.getQualifier() != null ? entity.getQualifier().getId() : null)
                 .qualifierCode(entity.getQualifier() != null ? entity.getQualifier().getCode() : null)
                 .qualifierName(entity.getQualifier() != null ? entity.getQualifier().getName() : null)

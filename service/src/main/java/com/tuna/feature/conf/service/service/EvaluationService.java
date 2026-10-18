@@ -4,9 +4,11 @@ import com.tuna.feature.conf.model.crud.CrudRequest;
 import com.tuna.feature.conf.model.crud.CrudResponse;
 import com.tuna.feature.conf.model.dto.EvaluationDto.Request;
 import com.tuna.feature.conf.model.dto.EvaluationDto.Response;
+import com.tuna.feature.conf.persistence.entity.EnvironmentEntity;
 import com.tuna.feature.conf.persistence.entity.FeatureEntity;
 import com.tuna.feature.conf.persistence.entity.FeatureQualifierEntity;
 import com.tuna.feature.conf.persistence.entity.FeatureRuleEntity;
+import com.tuna.feature.conf.persistence.repository.EnvironmentRepository;
 import com.tuna.feature.conf.persistence.repository.FeatureQualifierRepository;
 import com.tuna.feature.conf.persistence.repository.FeatureRepository;
 import com.tuna.feature.conf.persistence.repository.FeatureRuleRepository;
@@ -29,16 +31,20 @@ public class EvaluationService {
         private final FeatureRepository featureRepository;
         private final FeatureRuleRepository ruleRepository;
         private final FeatureQualifierRepository qualifierRepository;
+        private final EnvironmentRepository environmentRepository;
 
         public CrudResponse<Response> evaluateFeature(CrudRequest<Request> crudRequest) {
                 Request request = crudRequest.getData();
                 if (request == null || request.getFeatureCode() == null || request.getFeatureCode().isBlank()) {
                         throw new IllegalArgumentException("Feature code is required for evaluation");
                 }
+                if (request.getEnvironmentCode() == null || request.getEnvironmentCode().isBlank()) {
+                        throw new IllegalArgumentException("Environment code is required for evaluation");
+                }
 
                 List<String> logs = new ArrayList<>();
-                logs.add(String.format("Evaluating feature code '%s' for project ID %s", request.getFeatureCode(),
-                                request.getProjectId()));
+                logs.add(String.format("Evaluating feature code '%s' for project ID %s in environment '%s'",
+                                request.getFeatureCode(), request.getProjectId(), request.getEnvironmentCode()));
 
                 Optional<FeatureEntity> featureOpt = (request.getProjectId() != null)
                                 ? featureRepository.findByProjectIdAndCode(request.getProjectId(),
@@ -48,14 +54,22 @@ public class EvaluationService {
                 FeatureEntity feature = featureOpt.orElseThrow(
                                 () -> new ResourceNotFoundException("Feature", "code", request.getFeatureCode()));
 
-                List<FeatureRuleEntity> activeRules = ruleRepository.findByFeatureIdAndEnabledTrue(feature.getId());
+                String environmentCode = request.getEnvironmentCode().trim().toUpperCase();
+                Long featureProjectId = feature.getProject() != null ? feature.getProject().getId() : null;
+                EnvironmentEntity environment = environmentRepository
+                                .findByProjectIdAndCode(featureProjectId, environmentCode)
+                                .orElseThrow(() -> new ResourceNotFoundException("Environment", "code",
+                                                environmentCode));
+
+                List<FeatureRuleEntity> activeRules = ruleRepository
+                                .findByFeatureIdAndEnvironmentIdAndEnabledTrue(feature.getId(), environment.getId());
                 Instant now = Instant.now();
                 List<FeatureRuleEntity> effectiveRules = activeRules.stream()
                                 .filter(rule -> rule.isEffective(now))
                                 .toList();
                 logs.add(String.format(
-                                "Found %d active and effective rule(s) for feature '%s' (out of %d enabled rules)",
-                                effectiveRules.size(), feature.getCode(), activeRules.size()));
+                                "Found %d active and effective rule(s) for feature '%s' in environment '%s' (out of %d enabled rules)",
+                                effectiveRules.size(), feature.getCode(), environment.getCode(), activeRules.size()));
 
                 // Sort rules by Qualifier Priority (descending), then Rule Priority
                 // (descending)
@@ -99,6 +113,7 @@ public class EvaluationService {
                                 Response response = Response.builder()
                                                 .featureCode(feature.getCode())
                                                 .featureName(feature.getName())
+                                                .environmentCode(environment.getCode())
                                                 .resolvedValue(rule.getFeatureValue())
                                                 .source("RULE_MATCH")
                                                 .matchingRuleId(rule.getId())
@@ -113,6 +128,7 @@ public class EvaluationService {
                 Response fallback = Response.builder()
                                 .featureCode(feature.getCode())
                                 .featureName(feature.getName())
+                                .environmentCode(environment.getCode())
                                 .resolvedValue("false")
                                 .source("DEFAULT_FALLBACK")
                                 .logs(logs)

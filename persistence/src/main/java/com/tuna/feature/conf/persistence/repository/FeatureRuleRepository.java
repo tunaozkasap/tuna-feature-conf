@@ -11,5 +11,6 @@ import java.util.List;
 public interface FeatureRuleRepository extends JpaRepository<FeatureRuleEntity, Long>, JpaSpecificationExecutor<FeatureRuleEntity> {
     List<FeatureRuleEntity> findByFeatureId(Long featureId);
     List<FeatureRuleEntity> findByFeatureProjectId(Long projectId);
-    List<FeatureRuleEntity> findByFeatureIdAndEnabledTrue(Long featureId);
+    List<FeatureRuleEntity> findByFeatureIdAndEnvironmentIdAndEnabledTrue(Long featureId, Long environmentId);
+    boolean existsByEnvironmentId(Long environmentId);
 }

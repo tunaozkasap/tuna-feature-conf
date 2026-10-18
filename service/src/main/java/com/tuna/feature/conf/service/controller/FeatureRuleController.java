@@ -40,7 +40,7 @@ public class FeatureRuleController {
         return ResponseEntity.ok(ruleService.search(req));
     }
 
-    @Operation(summary = "Get all rules", description = "Retrieves rules, optionally filtered by feature ID and/or project ID")
+    @Operation(summary = "Get all rules", description = "Retrieves rules, optionally filtered by feature ID, environment ID and/or project ID")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Successfully retrieved list of rules")
     })
@@ -48,6 +48,8 @@ public class FeatureRuleController {
     public ResponseEntity<CrudResponse<Response>> getAllRules(
             @Parameter(description = "Optional feature ID to filter rules", example = "1")
             @RequestParam(required = false) Long featureId,
+            @Parameter(description = "Optional environment ID to filter rules", example = "1")
+            @RequestParam(required = false) Long environmentId,
             @Parameter(description = "Optional project ID to filter rules", example = "1")
             @RequestParam(required = false) Long projectId
     ) {
@@ -58,6 +60,13 @@ public class FeatureRuleController {
                     .field("feature.id")
                     .operator(FilterOperator.EQUALS)
                     .value(featureId)
+                    .build());
+        }
+        if (environmentId != null) {
+            filters.add(FilterVo.builder()
+                    .field("environment.id")
+                    .operator(FilterOperator.EQUALS)
+                    .value(environmentId)
                     .build());
         }
         if (projectId != null) {
