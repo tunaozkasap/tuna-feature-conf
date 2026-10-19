@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.experimental.FieldNameConstants;
@@ -24,7 +25,8 @@ import lombok.experimental.FieldNameConstants;
 @Setter
 @FieldNameConstants
 @Entity
-@Table(name = "feature_qualifiers")
+@Table(name = "feature_qualifiers",
+        uniqueConstraints = @UniqueConstraint(name = "uk_feature_qualifiers_project_code", columnNames = {"project_id", "code"}))
 public class FeatureQualifierEntity {
 
     /**

@@ -163,6 +163,13 @@ public class FeatureRuleService {
                     entity.getEnvironment().getCode(), environmentProjectId,
                     entity.getFeature().getCode(), featureProjectId));
         }
+        Long qualifierProjectId = entity.getQualifier().getProject() != null ? entity.getQualifier().getProject().getId() : null;
+        if (!Objects.equals(featureProjectId, qualifierProjectId)) {
+            throw new IllegalArgumentException(String.format(
+                    "Qualifier '%s' belongs to project %s but feature '%s' belongs to project %s",
+                    entity.getQualifier().getCode(), qualifierProjectId,
+                    entity.getFeature().getCode(), featureProjectId));
+        }
     }
 
     private Response toResponse(FeatureRuleEntity entity) {

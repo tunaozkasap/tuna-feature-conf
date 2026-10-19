@@ -10,6 +10,7 @@ import com.tuna.feature.conf.persistence.entity.FeatureEntity;
 import com.tuna.feature.conf.persistence.entity.ProjectEntity;
 import com.tuna.feature.conf.persistence.repository.FeatureRepository;
 import com.tuna.feature.conf.persistence.repository.ProjectRepository;
+import com.tuna.feature.conf.service.exception.InvalidRequestException;
 import com.tuna.feature.conf.service.exception.ResourceNotFoundException;
 import com.tuna.feature.conf.service.util.JpaQueryHelper;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -61,8 +63,11 @@ public class FeatureService {
         ProjectEntity project = projectRepository.findById(data.getProjectId())
                 .orElseThrow(() -> new ResourceNotFoundException("Project", "id", data.getProjectId()));
 
+        String code = data.getCode().trim().toUpperCase();
+        ensureCodeIsAvailable(project.getId(), code);
+
         FeatureEntity feature = new FeatureEntity();
-        feature.setCode(data.getCode().toUpperCase());
+        feature.setCode(code);
         feature.setName(data.getName());
         feature.setDescription(data.getDescription());
         feature.setProject(project);
@@ -80,19 +85,23 @@ public class FeatureService {
         FeatureEntity feature = featureRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Feature", "id", id));
 
+        Long projectId = feature.getProject() != null ? feature.getProject().getId() : null;
+        if (data.getProjectId() != null && !Objects.equals(data.getProjectId(), projectId)) {
+            throw new InvalidRequestException(
+                    "A feature cannot be moved to another project; its rules depend on the project's environments and qualifiers");
+        }
         if (data.getCode() != null && !data.getCode().isBlank()) {
-            feature.setCode(data.getCode().toUpperCase());
+            String code = data.getCode().trim().toUpperCase();
+            if (!code.equals(feature.getCode())) {
+                ensureCodeIsAvailable(projectId, code);
+                feature.setCode(code);
+            }
         }
         if (data.getName() != null && !data.getName().isBlank()) {
             feature.setName(data.getName());
         }
         if (data.getDescription() != null) {
             feature.setDescription(data.getDescription());
-        }
-        if (data.getProjectId() != null) {
-            ProjectEntity project = projectRepository.findById(data.getProjectId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Project", "id", data.getProjectId()));
-            feature.setProject(project);
         }
 
         FeatureEntity saved = featureRepository.save(feature);
@@ -108,6 +117,13 @@ public class FeatureService {
                 .success(true)
                 .message("Feature deleted successfully")
                 .build();
+    }
+
+    private void ensureCodeIsAvailable(Long projectId, String code) {
+        if (featureRepository.existsByProjectIdAndCode(projectId, code)) {
+            throw new InvalidRequestException(
+                    "Feature with code '" + code + "' already exists in project " + projectId);
+        }
     }
 
     private Response toResponse(FeatureEntity entity) {
