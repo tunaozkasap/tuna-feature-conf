@@ -34,6 +34,7 @@ public class OpenApiIntegrationTest {
                 .andExpect(jsonPath("$.paths['/api/features']").exists())
                 .andExpect(jsonPath("$.paths['/api/qualifiers']").exists())
                 .andExpect(jsonPath("$.paths['/api/rules']").exists())
+                .andExpect(jsonPath("$.paths['/api/environments']").exists())
                 .andExpect(jsonPath("$.paths['/api/evaluations/evaluate']").exists());
     }
 

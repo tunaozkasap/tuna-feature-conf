@@ -45,6 +45,14 @@ public class FeatureRuleEntity {
     private FeatureEntity feature;
 
     /**
+     * The environment this rule applies to (e.g., DEV, STAGING, PROD).
+     * Must belong to the same project as {@link #feature}.
+     */
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "environment_id", nullable = false)
+    private EnvironmentEntity environment;
+
+    /**
      * The qualifier/dimension used to evaluate this rule (e.g., USER_ID,
      * USER_SEGMENT, CHANNEL).
      */

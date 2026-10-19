@@ -19,6 +19,9 @@ public class FeatureRuleDto {
         @NotNull(message = "Feature ID is required")
         private Long featureId;
 
+        @NotNull(message = "Environment ID is required")
+        private Long environmentId;
+
         @NotNull(message = "Qualifier ID is required")
         private Long qualifierId;
 
@@ -42,6 +45,7 @@ public class FeatureRuleDto {
     @AllArgsConstructor
     public static class UpdateRequest {
         private Long featureId;
+        private Long environmentId;
         private Long qualifierId;
         private String qualifierValue;
         private String featureValue;
@@ -61,6 +65,8 @@ public class FeatureRuleDto {
         private Long featureId;
         private String featureCode;
         private String featureName;
+        private Long environmentId;
+        private String environmentCode;
         private Long qualifierId;
         private String qualifierCode;
         private String qualifierName;
