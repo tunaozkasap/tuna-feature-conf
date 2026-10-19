@@ -11,6 +11,10 @@ spring:
     username: sa
     password:
 
+  messages:
+    basename: messages
+    encoding: UTF-8
+
   h2:
     console:
       enabled: true
@@ -34,3 +38,11 @@ springdoc:
     tags-sorter: alpha
     display-request-duration: true
 
+app:
+  errors:
+    # Error responses always carry status, module, message (customer message), requestId and timestamp.
+    # When true they also carry technicalMessage and context. context follows this same flag on purpose: it holds the
+    # raw details behind the technical message (ids, inputs, constraint names, SQL states, exception types), which is
+    # as internal as the message itself. When false both fields are left out of the JSON (absent, not null).
+    # The execution evidence always records the technical message and the masked context, whatever this says.
+    include-technical-message: true

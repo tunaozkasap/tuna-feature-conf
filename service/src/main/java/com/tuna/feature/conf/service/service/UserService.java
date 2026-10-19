@@ -8,6 +8,7 @@ import com.tuna.feature.conf.model.dto.UserDto.Response;
 import com.tuna.feature.conf.model.dto.UserDto.UpdateRequest;
 import com.tuna.feature.conf.persistence.entity.UserEntity;
 import com.tuna.feature.conf.persistence.repository.UserRepository;
+import com.tuna.feature.conf.service.exception.InvalidRequestException;
 import com.tuna.feature.conf.service.exception.ResourceNotFoundException;
 import com.tuna.feature.conf.service.util.EvidenceMasking;
 import com.tuna.feature.conf.service.util.JpaQueryHelper;
@@ -57,7 +58,7 @@ public class UserService {
         try (var get = s().parent("getUser")) {
             s().kv("userId", id);
             UserEntity user = userRepository.findById(id)
-                    .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
+                    .orElseThrow(() -> new ResourceNotFoundException("user", "id", id));
             s().kv("found", true);
             return CrudResponse.of(toResponse(user));
         }
@@ -68,7 +69,7 @@ public class UserService {
             CreateRequest data = request.getData();
             if (data == null) {
                 s().kv("rejected", "missingData");
-                throw new IllegalArgumentException("User payload data is required");
+                throw new InvalidRequestException("user", "missingData");
             }
             recordInput(data.getUsername(), data.getEmail());
 
@@ -88,12 +89,12 @@ public class UserService {
             UpdateRequest data = request.getData();
             if (data == null) {
                 s().kv("rejected", "missingData");
-                throw new IllegalArgumentException("User payload data is required");
+                throw new InvalidRequestException("user", "missingData");
             }
             recordInput(data.getUsername(), data.getEmail());
 
             UserEntity user = userRepository.findById(id)
-                    .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
+                    .orElseThrow(() -> new ResourceNotFoundException("user", "id", id));
             s().kv("found", true);
 
             List<String> changedFields = new ArrayList<>();
@@ -118,7 +119,7 @@ public class UserService {
             s().kv("userId", id);
             if (!userRepository.existsById(id)) {
                 s().kv("found", false);
-                throw new ResourceNotFoundException("User", "id", id);
+                throw new ResourceNotFoundException("user", "id", id);
             }
             s().kv("found", true);
             userRepository.deleteById(id);

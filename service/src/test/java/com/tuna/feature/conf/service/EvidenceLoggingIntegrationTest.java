@@ -112,8 +112,12 @@ public class EvidenceLoggingIntegrationTest {
         JsonNode evidence = onlyEvidence();
         assertThat(evidence.path("severity").asText()).isEqualTo("WARN");
         assertThat(evidence.path("evaluation").path("featureLookup").path("found").asBoolean()).isFalse();
-        assertThat(evidence.path("error").path("resource").asText()).isEqualTo("Feature");
-        assertThat(evidence.path("error").path("httpStatus").asInt()).isEqualTo(404);
+        JsonNode error = evidence.path("error");
+        assertThat(error.path("module").asText()).isEqualTo("Feature");
+        assertThat(error.path("technicalMessageKey").asText()).isEqualTo("feature.notFound.technical");
+        assertThat(error.path("technicalMessage").asText()).isEqualTo("Feature not found with code 'NOPE'");
+        assertThat(error.path("context").path("value").asText()).isEqualTo("NOPE");
+        assertThat(error.path("httpStatus").asInt()).isEqualTo(404);
     }
 
     @Test
@@ -123,7 +127,8 @@ public class EvidenceLoggingIntegrationTest {
                 .andExpect(status().isBadRequest());
 
         JsonNode error = onlyEvidence().path("error");
-        assertThat(error.path("violatedConstraints").path("data.code").asText()).isEqualTo("NotBlank");
+        assertThat(error.path("context").path("fieldErrors").path("data.code").path("constraint").asText())
+                .isEqualTo("NotBlank");
     }
 
     @Test
@@ -135,8 +140,8 @@ public class EvidenceLoggingIntegrationTest {
         JsonNode evidence = onlyEvidence();
         assertThat(evidence.path("deleteProject").path("found").asBoolean()).isTrue();
         JsonNode error = evidence.path("error");
-        assertThat(error.path("constraint").asText()).matches("[A-Z0-9_]+");
-        assertThat(error.path("sqlState").asText()).isEqualTo("23503");
+        assertThat(error.path("context").path("constraint").asText()).matches("[A-Z0-9_]+");
+        assertThat(error.path("context").path("sqlState").asText()).isEqualTo("23503");
         assertThat(error.path("severity").asText()).isEqualTo("WARN");
     }
 

@@ -8,6 +8,7 @@ import com.tuna.feature.conf.model.dto.ProjectDto.Response;
 import com.tuna.feature.conf.model.dto.ProjectDto.UpdateRequest;
 import com.tuna.feature.conf.persistence.entity.ProjectEntity;
 import com.tuna.feature.conf.persistence.repository.ProjectRepository;
+import com.tuna.feature.conf.service.exception.InvalidRequestException;
 import com.tuna.feature.conf.service.exception.ResourceNotFoundException;
 import com.tuna.feature.conf.service.util.JpaQueryHelper;
 import lombok.RequiredArgsConstructor;
@@ -56,7 +57,7 @@ public class ProjectService {
         try (var get = s().parent("getProject")) {
             s().kv("projectId", id);
             ProjectEntity project = projectRepository.findById(id)
-                    .orElseThrow(() -> new ResourceNotFoundException("Project", "id", id));
+                    .orElseThrow(() -> new ResourceNotFoundException("project", "id", id));
             s().kv("found", true);
             return CrudResponse.of(toResponse(project));
         }
@@ -67,7 +68,7 @@ public class ProjectService {
             CreateRequest data = request.getData();
             if (data == null) {
                 s().kv("rejected", "missingData");
-                throw new IllegalArgumentException("Project payload data is required");
+                throw new InvalidRequestException("project", "missingData");
             }
             recordInput(data.getName(), data.getDescription());
 
@@ -87,12 +88,12 @@ public class ProjectService {
             UpdateRequest data = request.getData();
             if (data == null) {
                 s().kv("rejected", "missingData");
-                throw new IllegalArgumentException("Project payload data is required");
+                throw new InvalidRequestException("project", "missingData");
             }
             recordInput(data.getName(), data.getDescription());
 
             ProjectEntity project = projectRepository.findById(id)
-                    .orElseThrow(() -> new ResourceNotFoundException("Project", "id", id));
+                    .orElseThrow(() -> new ResourceNotFoundException("project", "id", id));
             s().kv("found", true);
 
             // Full replacement: both fields are overwritten, also with null
@@ -110,7 +111,7 @@ public class ProjectService {
             s().kv("projectId", id);
             if (!projectRepository.existsById(id)) {
                 s().kv("found", false);
-                throw new ResourceNotFoundException("Project", "id", id);
+                throw new ResourceNotFoundException("project", "id", id);
             }
             s().kv("found", true);
             projectRepository.deleteById(id);

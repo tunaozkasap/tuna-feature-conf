@@ -1,7 +1,11 @@
 package com.tuna.feature.conf.service.exception;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.tunaozkasap.execlog.ScopedEvidence.ExecutionFact;
+import com.tuna.feature.conf.service.config.ErrorResponseProperties;
+import com.tuna.feature.conf.service.evidence.RequestEvidenceFilter;
 import com.tuna.feature.conf.service.util.EvidenceMasking;
+import lombok.RequiredArgsConstructor;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.InvalidDataAccessApiUsageException;
@@ -16,13 +20,15 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,138 +36,175 @@ import java.util.Map;
 import static com.github.tunaozkasap.execlog.ScopedEvidence.s;
 
 /**
- * Maps exceptions to error responses and records each handled exception in the request's evidence under
- * {@code error}: its type, where it was thrown, the mapped status and, for server errors, the stack trace.
+ * Turns every exception into an {@link ApiErrorResponse}: a {@link ServiceException} as it is, any other exception
+ * through an equivalent {@link ServiceException} built here. Each handled exception is recorded in the request's
+ * evidence under {@code error}: its type, where it was thrown, the mapped status, the resolved module and technical
+ * message, the (masked) context and, for server errors, the stack trace. The evidence always holds the technical
+ * message and context, whatever {@code app.errors.include-technical-message} says.
  */
 @RestControllerAdvice
+@RequiredArgsConstructor
 public class GlobalExceptionHandler {
 
     private static final int MAX_STACK_FRAMES = 25;
     private static final int MAX_CAUSE_DEPTH = 10;
+    private static final String REQUEST_MODULE = "request";
 
-    @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<Map<String, Object>> handleResourceNotFound(ResourceNotFoundException ex) {
-        ExecutionFact error = recordError(ex, HttpStatus.NOT_FOUND);
-        if (ex.getResourceName() != null) {
-            error.kv("resource", ex.getResourceName())
-                 .kv("field", ex.getFieldName())
-                 .kv("value", EvidenceMasking.maskValue(ex.getFieldName(), ex.getFieldValue()));
-        }
-        return error(HttpStatus.NOT_FOUND, "Not Found", ex.getMessage());
+    private final ErrorMessageResolver messageResolver;
+    private final ErrorResponseProperties properties;
+
+    @ExceptionHandler(ServiceException.class)
+    public ResponseEntity<ApiErrorResponse> handleServiceException(ServiceException ex) {
+        return respond(ex, ex);
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
-    public ResponseEntity<Map<String, Object>> handleNoResource(NoResourceFoundException ex) {
-        recordError(ex, HttpStatus.NOT_FOUND)
-                .kv("requestedMethod", ex.getHttpMethod().name())
-                .kv("resourcePath", ex.getResourcePath());
-        return error(HttpStatus.NOT_FOUND, "Not Found", "No endpoint " + ex.getHttpMethod() + " /" + ex.getResourcePath());
+    public ResponseEntity<ApiErrorResponse> handleNoResource(NoResourceFoundException ex) {
+        return respond(ex, ServiceException.of(REQUEST_MODULE, "noEndpoint")
+                .status(HttpStatus.NOT_FOUND)
+                .with("requestedMethod", ex.getHttpMethod().name())
+                .with("resourcePath", "/" + ex.getResourcePath()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Map<String, Object>> handleValidationExceptions(MethodArgumentNotValidException ex) {
-        Map<String, String> errors = new HashMap<>();
-        Map<String, String> violatedConstraints = new LinkedHashMap<>();
+    public ResponseEntity<ApiErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex) {
+        List<String> invalidFields = new ArrayList<>();
+        Map<String, Map<String, String>> fieldErrors = new LinkedHashMap<>();
         for (FieldError error : ex.getBindingResult().getFieldErrors()) {
-            errors.put(error.getField(), error.getDefaultMessage());
-            violatedConstraints.put(error.getField(), error.getCode());
+            Map<String, String> details = new LinkedHashMap<>();
+            details.put("constraint", error.getCode());
+            details.put("message", error.getDefaultMessage());
+            fieldErrors.put(error.getField(), details);
+            invalidFields.add(error.getField());
         }
-        recordError(ex, HttpStatus.BAD_REQUEST)
-                .kv("violationCount", violatedConstraints.size())
-                .kv("violatedConstraints", violatedConstraints);
-        ResponseEntity<Map<String, Object>> response =
-                error(HttpStatus.BAD_REQUEST, "Validation Failed", "Request validation failed");
-        response.getBody().put("validationErrors", errors);
-        return response;
+        return respond(ex, ServiceException.of(REQUEST_MODULE, "validationFailed")
+                .status(HttpStatus.BAD_REQUEST)
+                .with("violationCount", fieldErrors.size())
+                .with("invalidFields", invalidFields)
+                .with("fieldErrors", fieldErrors));
     }
 
-    @ExceptionHandler({IllegalArgumentException.class, InvalidRequestException.class})
-    public ResponseEntity<Map<String, Object>> handleBadRequest(RuntimeException ex) {
-        recordError(ex, HttpStatus.BAD_REQUEST);
-        return error(HttpStatus.BAD_REQUEST, "Bad Request", ex.getMessage());
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
+        return respond(ex, ServiceException.of(REQUEST_MODULE, "invalidArgument")
+                .status(HttpStatus.BAD_REQUEST)
+                .with("reason", ex.getMessage()));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<Map<String, Object>> handleUnreadableBody(HttpMessageNotReadableException ex) {
-        recordError(ex, HttpStatus.BAD_REQUEST)
-                .kv("rootCauseType", rootCause(ex).getClass().getName());
-        return error(HttpStatus.BAD_REQUEST, "Bad Request", "Request body is missing or is not valid JSON for this endpoint");
+    public ResponseEntity<ApiErrorResponse> handleUnreadableBody(HttpMessageNotReadableException ex) {
+        return respond(ex, ServiceException.of(REQUEST_MODULE, "unreadableBody")
+                .status(HttpStatus.BAD_REQUEST)
+                .with("rootCauseType", rootCause(ex).getClass().getName()));
     }
 
     @ExceptionHandler(MissingServletRequestParameterException.class)
-    public ResponseEntity<Map<String, Object>> handleMissingParameter(MissingServletRequestParameterException ex) {
-        recordError(ex, HttpStatus.BAD_REQUEST)
-                .kv("parameter", ex.getParameterName())
-                .kv("parameterType", ex.getParameterType());
-        return error(HttpStatus.BAD_REQUEST, "Bad Request", ex.getMessage());
+    public ResponseEntity<ApiErrorResponse> handleMissingParameter(MissingServletRequestParameterException ex) {
+        return respond(ex, ServiceException.of(REQUEST_MODULE, "missingParameter")
+                .status(HttpStatus.BAD_REQUEST)
+                .with("parameter", ex.getParameterName())
+                .with("parameterType", ex.getParameterType()));
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-    public ResponseEntity<Map<String, Object>> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
-        recordError(ex, HttpStatus.BAD_REQUEST)
-                .kv("parameter", ex.getName())
-                .kv("requiredType", ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : null)
-                .kv("value", EvidenceMasking.maskValue(ex.getName(), String.valueOf(ex.getValue())));
-        return error(HttpStatus.BAD_REQUEST, "Bad Request",
-                String.format("Invalid value '%s' for parameter '%s'", ex.getValue(), ex.getName()));
+    public ResponseEntity<ApiErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        return respond(ex, ServiceException.of(REQUEST_MODULE, "typeMismatch")
+                .status(HttpStatus.BAD_REQUEST)
+                .with("parameter", ex.getName())
+                .with("requiredType", ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : null)
+                .with("value", String.valueOf(ex.getValue())));
     }
 
     @ExceptionHandler(PropertyReferenceException.class)
-    public ResponseEntity<Map<String, Object>> handleUnknownProperty(PropertyReferenceException ex) {
-        recordError(ex, HttpStatus.BAD_REQUEST)
-                .kv("unknownProperty", ex.getPropertyName())
-                .kv("entityType", ex.getType().getType().getSimpleName());
-        return error(HttpStatus.BAD_REQUEST, "Bad Request", "Unknown field '" + ex.getPropertyName() + "' in sort");
+    public ResponseEntity<ApiErrorResponse> handleUnknownProperty(PropertyReferenceException ex) {
+        return respond(ex, ServiceException.of("search", "unknownProperty")
+                .status(HttpStatus.BAD_REQUEST)
+                .with("property", ex.getPropertyName())
+                .with("entityType", ex.getType().getType().getSimpleName()));
     }
 
     @ExceptionHandler(InvalidDataAccessApiUsageException.class)
-    public ResponseEntity<Map<String, Object>> handleInvalidDataAccess(InvalidDataAccessApiUsageException ex) {
+    public ResponseEntity<ApiErrorResponse> handleInvalidDataAccess(InvalidDataAccessApiUsageException ex) {
         Throwable rootCause = rootCause(ex);
-        recordError(ex, HttpStatus.BAD_REQUEST)
-                .kv("rootCauseType", rootCause.getClass().getName())
-                .kv("rootCauseThrownAt", thrownAt(rootCause));
-        return error(HttpStatus.BAD_REQUEST, "Bad Request", "Invalid query: check search fields and values");
+        if (rootCause instanceof ServiceException serviceException) {
+            return respond(ex, serviceException);
+        }
+        return respond(ex, ServiceException.of("search", "invalidQuery")
+                .status(HttpStatus.BAD_REQUEST)
+                .with("rootCauseType", rootCause.getClass().getName())
+                .with("rootCauseThrownAt", thrownAt(rootCause)));
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
-    public ResponseEntity<Map<String, Object>> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
-        recordError(ex, HttpStatus.METHOD_NOT_ALLOWED)
-                .kv("requestedMethod", ex.getMethod())
-                .kv("supportedMethods", ex.getSupportedMethods());
-        return error(HttpStatus.METHOD_NOT_ALLOWED, "Method Not Allowed", ex.getMessage());
+    public ResponseEntity<ApiErrorResponse> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
+        return respond(ex, ServiceException.of(REQUEST_MODULE, "methodNotAllowed")
+                .status(HttpStatus.METHOD_NOT_ALLOWED)
+                .with("requestedMethod", ex.getMethod())
+                .with("supportedMethods", ex.getSupportedMethods() != null
+                        ? Arrays.asList(ex.getSupportedMethods()) : null));
     }
 
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
-    public ResponseEntity<Map<String, Object>> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException ex) {
-        recordError(ex, HttpStatus.UNSUPPORTED_MEDIA_TYPE)
-                .kv("contentType", ex.getContentType() != null ? ex.getContentType().toString() : null)
-                .kv("supportedMediaTypes", ex.getSupportedMediaTypes().toString());
-        return error(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Unsupported Media Type", ex.getMessage());
+    public ResponseEntity<ApiErrorResponse> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException ex) {
+        return respond(ex, ServiceException.of(REQUEST_MODULE, "unsupportedMediaType")
+                .status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                .with("contentType", ex.getContentType() != null ? ex.getContentType().toString() : null)
+                .with("supportedMediaTypes", ex.getSupportedMediaTypes().toString()));
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
-    public ResponseEntity<Map<String, Object>> handleDataIntegrity(DataIntegrityViolationException ex) {
-        ExecutionFact error = recordError(ex, HttpStatus.CONFLICT)
-                .kv("rootCauseType", ex.getMostSpecificCause().getClass().getName());
+    public ResponseEntity<ApiErrorResponse> handleDataIntegrity(DataIntegrityViolationException ex) {
+        ServiceException error = ServiceException.of("data", "integrityViolation")
+                .status(HttpStatus.CONFLICT)
+                .with("rootCauseType", ex.getMostSpecificCause().getClass().getName());
         if (ex.getCause() instanceof ConstraintViolationException constraintViolation) {
-            error.kv("constraint", constraintIdentifier(constraintViolation.getConstraintName()));
+            error.with("constraint", constraintIdentifier(constraintViolation.getConstraintName()));
         }
         if (ex.getMostSpecificCause() instanceof SQLException sqlException) {
-            error.kv("sqlState", sqlException.getSQLState()).kv("sqlErrorCode", sqlException.getErrorCode());
+            error.with("sqlState", sqlException.getSQLState()).with("sqlErrorCode", sqlException.getErrorCode());
         }
-        return error(HttpStatus.CONFLICT, "Conflict",
-                "The request conflicts with existing data (duplicate value or record still in use)");
+        return respond(ex, error);
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, Object>> handleGenericException(Exception ex) {
+    public ResponseEntity<ApiErrorResponse> handleGenericException(Exception ex) {
         Throwable rootCause = rootCause(ex);
-        recordError(ex, HttpStatus.INTERNAL_SERVER_ERROR)
-                .kv("message", ex.getMessage())
-                .kv("causeChain", causeChain(ex))
-                .kv("rootCauseMessage", rootCause.getMessage())
-                .kv("stackTrace", stackFrames(rootCause));
-        return error(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error", "An unexpected error occurred");
+        ResponseEntity<ApiErrorResponse> response = respond(ex, ServiceException.of("service", "unexpected")
+                .with("exceptionType", ex.getClass().getName())
+                .with("thrownAt", thrownAt(ex)));
+        // Exception messages may carry SQL or data: evidence only, never the response
+        s().root().f("error")
+           .kv("message", ex.getMessage())
+           .kv("causeChain", causeChain(ex))
+           .kv("rootCauseMessage", rootCause.getMessage())
+           .kv("stackTrace", stackFrames(rootCause));
+        return response;
+    }
+
+    /**
+     * Records the error and answers with its JSON. {@code ex} is the exception that was thrown, {@code error} the
+     * {@link ServiceException} describing it (the same instance when a {@link ServiceException} was thrown).
+     */
+    private ResponseEntity<ApiErrorResponse> respond(Exception ex, ServiceException error) {
+        HttpStatus status = error.getStatus();
+        ObjectNode context = error.getContext();
+        String module = messageResolver.resolve(error.getModuleNameBundleKey(), context);
+        String technicalMessage = messageResolver.resolve(error.getTechnicalMessageBundleKey(), context);
+        String customerMessage = messageResolver.resolve(error.getCustomerMessageBundleKey(), context);
+
+        recordError(ex, status)
+                .kv("module", module)
+                .kv("technicalMessageKey", error.getTechnicalMessageBundleKey())
+                .kv("technicalMessage", technicalMessage)
+                .kv("context", EvidenceMasking.maskJson(context));
+
+        boolean includeTechnical = properties.includeTechnicalMessage();
+        ApiErrorResponse body = new ApiErrorResponse(status.value(), module, customerMessage,
+                includeTechnical ? technicalMessage : null,
+                includeTechnical ? context : null,
+                requestId(),
+                Instant.now().toString());
+        return ResponseEntity.status(status).body(body);
     }
 
     private static ExecutionFact recordError(Exception ex, HttpStatus status) {
@@ -171,6 +214,16 @@ public class GlobalExceptionHandler {
                 .kv("thrownAt", thrownAt(ex))
                 .kv("httpStatus", status.value())
                 .kv("severity", status.is5xxServerError() ? "ERROR" : "WARN");
+    }
+
+    private static String requestId() {
+        RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
+        if (attributes == null) {
+            return null;
+        }
+        Object requestId = attributes.getAttribute(RequestEvidenceFilter.REQUEST_ID_ATTRIBUTE,
+                RequestAttributes.SCOPE_REQUEST);
+        return requestId != null ? requestId.toString() : null;
     }
 
     /**
@@ -229,14 +282,5 @@ public class GlobalExceptionHandler {
             depth++;
         }
         return current;
-    }
-
-    private static ResponseEntity<Map<String, Object>> error(HttpStatus status, String error, String message) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("timestamp", Instant.now().toString());
-        body.put("status", status.value());
-        body.put("error", error);
-        body.put("message", message);
-        return ResponseEntity.status(status).body(body);
     }
 }

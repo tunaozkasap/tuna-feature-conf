@@ -12,6 +12,7 @@ import com.tuna.feature.conf.persistence.entity.FeatureRuleEntity;
 import com.tuna.feature.conf.persistence.repository.EnvironmentRepository;
 import com.tuna.feature.conf.persistence.repository.FeatureRepository;
 import com.tuna.feature.conf.persistence.repository.FeatureRuleRepository;
+import com.tuna.feature.conf.service.exception.InvalidRequestException;
 import com.tuna.feature.conf.service.exception.ResourceNotFoundException;
 import com.tuna.feature.conf.service.util.EvidenceMasking;
 import lombok.RequiredArgsConstructor;
@@ -115,15 +116,18 @@ public class EvaluationService {
         private static void validate(Request request) {
                 if (request == null || request.getFeatureCode() == null || request.getFeatureCode().isBlank()) {
                         reject("missingFeatureCode");
-                        throw new IllegalArgumentException("Feature code is required for evaluation");
+                        throw new InvalidRequestException("evaluation", "missingFeatureCode");
                 }
                 if (request.getProjectId() == null) {
                         reject("missingProjectId");
-                        throw new IllegalArgumentException("Project ID is required for evaluation");
+                        throw new InvalidRequestException("evaluation", "missingProjectId")
+                                        .with("featureCode", request.getFeatureCode());
                 }
                 if (request.getEnvironmentCode() == null || request.getEnvironmentCode().isBlank()) {
                         reject("missingEnvironmentCode");
-                        throw new IllegalArgumentException("Environment code is required for evaluation");
+                        throw new InvalidRequestException("evaluation", "missingEnvironmentCode")
+                                        .with("featureCode", request.getFeatureCode())
+                                        .with("projectId", request.getProjectId());
                 }
                 s().f("validation").kv("passed", true);
         }
@@ -140,7 +144,7 @@ public class EvaluationService {
                                 .kv("code", featureCode)
                                 .kv("found", feature.isPresent());
                 if (feature.isEmpty()) {
-                        throw new ResourceNotFoundException("Feature", "code", requestedCode);
+                        throw new ResourceNotFoundException("feature", "code", requestedCode);
                 }
                 lookup.kv("featureId", feature.get().getId()).kv("featureName", feature.get().getName());
                 return feature.get();
@@ -154,7 +158,7 @@ public class EvaluationService {
                                 .kv("code", environmentCode)
                                 .kv("found", environment.isPresent());
                 if (environment.isEmpty()) {
-                        throw new ResourceNotFoundException("Environment", "code", environmentCode);
+                        throw new ResourceNotFoundException("environment", "code", environmentCode);
                 }
                 lookup.kv("environmentId", environment.get().getId());
                 return environment.get();

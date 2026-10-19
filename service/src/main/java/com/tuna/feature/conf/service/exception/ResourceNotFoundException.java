@@ -1,25 +1,18 @@
 package com.tuna.feature.conf.service.exception;
 
-import lombok.Getter;
+import org.springframework.http.HttpStatus;
 
-@Getter
-public class ResourceNotFoundException extends RuntimeException {
+/**
+ * Signals that a resource looked up by one of its fields does not exist (HTTP 404). The context holds the lookup
+ * {@code field} and its {@code value}; the messages are {@code <module>.notFound.technical} and
+ * {@code <module>.notFound.customer}.
+ */
+public class ResourceNotFoundException extends ServiceException {
 
-    private final String resourceName;
-    private final String fieldName;
-    private final transient Object fieldValue;
-
-    public ResourceNotFoundException(String message) {
-        super(message);
-        this.resourceName = null;
-        this.fieldName = null;
-        this.fieldValue = null;
-    }
-
-    public ResourceNotFoundException(String resourceName, String fieldName, Object fieldValue) {
-        super(String.format("%s not found with %s: '%s'", resourceName, fieldName, fieldValue));
-        this.resourceName = resourceName;
-        this.fieldName = fieldName;
-        this.fieldValue = fieldValue;
+    public ResourceNotFoundException(String module, String field, Object value) {
+        super(moduleKey(module), technicalKey(module, "notFound"), customerKey(module, "notFound"));
+        status(HttpStatus.NOT_FOUND);
+        with("field", field);
+        with("value", value);
     }
 }

@@ -61,7 +61,7 @@ public class FeatureService {
         try (var get = s().parent("getFeature")) {
             s().kv("featureId", id);
             FeatureEntity feature = featureRepository.findById(id)
-                    .orElseThrow(() -> new ResourceNotFoundException("Feature", "id", id));
+                    .orElseThrow(() -> new ResourceNotFoundException("feature", "id", id));
             s().kv("found", true).kv("code", feature.getCode());
             return CrudResponse.of(toResponse(feature));
         }
@@ -72,12 +72,12 @@ public class FeatureService {
             CreateRequest data = request.getData();
             if (data == null) {
                 s().kv("rejected", "missingData");
-                throw new IllegalArgumentException("Feature payload data is required");
+                throw new InvalidRequestException("feature", "missingData");
             }
             recordInput(data.getProjectId(), data.getCode(), data.getName(), data.getDescription());
 
             ProjectEntity project = projectRepository.findById(data.getProjectId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Project", "id", data.getProjectId()));
+                    .orElseThrow(() -> new ResourceNotFoundException("project", "id", data.getProjectId()));
             s().kv("projectFound", true);
 
             String code = data.getCode().trim().toUpperCase();
@@ -102,19 +102,21 @@ public class FeatureService {
             UpdateRequest data = request.getData();
             if (data == null) {
                 s().kv("rejected", "missingData");
-                throw new IllegalArgumentException("Feature payload data is required");
+                throw new InvalidRequestException("feature", "missingData");
             }
             recordInput(data.getProjectId(), data.getCode(), data.getName(), data.getDescription());
 
             FeatureEntity feature = featureRepository.findById(id)
-                    .orElseThrow(() -> new ResourceNotFoundException("Feature", "id", id));
+                    .orElseThrow(() -> new ResourceNotFoundException("feature", "id", id));
             s().kv("found", true).kv("currentCode", feature.getCode());
 
             Long projectId = feature.getProject() != null ? feature.getProject().getId() : null;
             if (data.getProjectId() != null && !Objects.equals(data.getProjectId(), projectId)) {
                 s().kv("rejected", "projectChange").kv("currentProjectId", projectId);
-                throw new InvalidRequestException(
-                        "A feature cannot be moved to another project; its rules depend on the project's environments and qualifiers");
+                throw new InvalidRequestException("feature", "projectChange")
+                        .with("featureId", id)
+                        .with("currentProjectId", projectId)
+                        .with("requestedProjectId", data.getProjectId());
             }
             List<String> changedFields = new ArrayList<>();
             if (data.getCode() != null && !data.getCode().isBlank()) {
@@ -146,7 +148,7 @@ public class FeatureService {
             s().kv("featureId", id);
             if (!featureRepository.existsById(id)) {
                 s().kv("found", false);
-                throw new ResourceNotFoundException("Feature", "id", id);
+                throw new ResourceNotFoundException("feature", "id", id);
             }
             s().kv("found", true);
             featureRepository.deleteById(id);
@@ -163,8 +165,9 @@ public class FeatureService {
         s().f("codeCheck").kv("projectId", projectId).kv("code", code).kv("available", !taken);
         if (taken) {
             s().kv("rejected", "duplicateCode");
-            throw new InvalidRequestException(
-                    "Feature with code '" + code + "' already exists in project " + projectId);
+            throw new InvalidRequestException("feature", "duplicateCode")
+                    .with("featureCode", code)
+                    .with("projectId", projectId);
         }
     }
 
