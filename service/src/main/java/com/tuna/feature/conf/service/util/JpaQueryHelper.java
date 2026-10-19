@@ -111,7 +111,8 @@ public final class JpaQueryHelper {
                 }
                 if (filter.getField() == null || filter.getField().isBlank()) {
                     rejectFilter(filter, "missingField");
-                    throw new InvalidRequestException("Every filter needs a field");
+                    throw new InvalidRequestException("search", "missingFilterField")
+                            .with("operator", filter.getOperator());
                 }
 
                 Path<?> path = resolvePath(root, filter);
@@ -123,8 +124,9 @@ public final class JpaQueryHelper {
                 Object val = filter.getValue();
                 if (val == null && operator != FilterOperator.IS_NULL && operator != FilterOperator.IS_NOT_NULL) {
                     rejectFilter(filter, "missingValue");
-                    throw new InvalidRequestException(
-                            "Filter on '" + filter.getField() + "' with operator " + operator + " needs a value");
+                    throw new InvalidRequestException("search", "missingFilterValue")
+                            .with("field", filter.getField())
+                            .with("operator", operator);
                 }
 
                 switch (operator) {
@@ -189,7 +191,9 @@ public final class JpaQueryHelper {
             }
         } catch (IllegalArgumentException | IllegalStateException ex) {
             rejectFilter(filter, "unknownField");
-            throw new InvalidRequestException("Unknown filter field '" + filter.getField() + "'");
+            throw new InvalidRequestException("search", "unknownFilterField")
+                    .with("field", filter.getField())
+                    .cause(ex);
         }
         return path;
     }
@@ -200,7 +204,9 @@ public final class JpaQueryHelper {
             return (Comparable) c;
         }
         rejectFilter(filter, "valueNotComparable");
-        throw new InvalidRequestException(
-                "Filter on '" + filter.getField() + "' with operator " + filter.getOperator() + " needs a single comparable value");
+        throw new InvalidRequestException("search", "valueNotComparable")
+                .with("field", filter.getField())
+                .with("operator", filter.getOperator())
+                .with("valueType", filter.getValue() != null ? filter.getValue().getClass().getSimpleName() : null);
     }
 }

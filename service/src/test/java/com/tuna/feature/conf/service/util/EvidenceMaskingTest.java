@@ -1,5 +1,7 @@
 package com.tuna.feature.conf.service.util;
 
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -22,6 +24,20 @@ class EvidenceMaskingTest {
         assertThat(EvidenceMasking.maskValue("X-Api-Key", "abc")).isEqualTo(EvidenceMasking.MASK);
         assertThat(EvidenceMasking.maskValue("EMAIL", "jane@example.com")).isEqualTo("j***@example.com");
         assertThat(EvidenceMasking.maskValue("COUNTRY", "TR")).isEqualTo("TR");
+    }
+
+    @Test
+    @DisplayName("JSON fields are masked by name at any depth without changing the original")
+    void masksJson() {
+        ObjectNode original = JsonNodeFactory.instance.objectNode().put("featureCode", "DARK_MODE").put("token", "t0k");
+        original.putObject("user").put("email", "jane.doe@example.com").put("id", 7);
+
+        ObjectNode masked = EvidenceMasking.maskJson(original);
+
+        assertThat(masked.toString()).isEqualTo(
+                "{\"featureCode\":\"DARK_MODE\",\"token\":\"***\",\"user\":{\"email\":\"j***@example.com\",\"id\":7}}");
+        assertThat(original.path("token").asText()).isEqualTo("t0k");
+        assertThat(EvidenceMasking.maskJson(null)).isNull();
     }
 
     @Test

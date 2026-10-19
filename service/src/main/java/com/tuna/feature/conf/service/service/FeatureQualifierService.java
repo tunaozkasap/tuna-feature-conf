@@ -62,7 +62,7 @@ public class FeatureQualifierService {
         try (var get = s().parent("getQualifier")) {
             s().kv("qualifierId", id);
             FeatureQualifierEntity entity = qualifierRepository.findById(id)
-                    .orElseThrow(() -> new ResourceNotFoundException("FeatureQualifier", "id", id));
+                    .orElseThrow(() -> new ResourceNotFoundException("qualifier", "id", id));
             s().kv("found", true).kv("code", entity.getCode());
             return CrudResponse.of(toResponse(entity));
         }
@@ -73,12 +73,12 @@ public class FeatureQualifierService {
             CreateRequest data = request.getData();
             if (data == null) {
                 s().kv("rejected", "missingData");
-                throw new IllegalArgumentException("FeatureQualifier payload data is required");
+                throw new InvalidRequestException("qualifier", "missingData");
             }
             recordInput(data.getProjectId(), data.getCode(), data.getName(), data.getPriority(), data.getValueType());
 
             ProjectEntity project = projectRepository.findById(data.getProjectId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Project", "id", data.getProjectId()));
+                    .orElseThrow(() -> new ResourceNotFoundException("project", "id", data.getProjectId()));
             s().kv("projectFound", true);
 
             String code = data.getCode().trim().toUpperCase();
@@ -106,19 +106,21 @@ public class FeatureQualifierService {
             UpdateRequest data = request.getData();
             if (data == null) {
                 s().kv("rejected", "missingData");
-                throw new IllegalArgumentException("FeatureQualifier payload data is required");
+                throw new InvalidRequestException("qualifier", "missingData");
             }
             recordInput(data.getProjectId(), data.getCode(), data.getName(), data.getPriority(), data.getValueType());
 
             FeatureQualifierEntity entity = qualifierRepository.findById(id)
-                    .orElseThrow(() -> new ResourceNotFoundException("FeatureQualifier", "id", id));
+                    .orElseThrow(() -> new ResourceNotFoundException("qualifier", "id", id));
             s().kv("found", true).kv("currentCode", entity.getCode());
 
             Long projectId = entity.getProject() != null ? entity.getProject().getId() : null;
             if (data.getProjectId() != null && !Objects.equals(data.getProjectId(), projectId)) {
                 s().kv("rejected", "projectChange").kv("currentProjectId", projectId);
-                throw new InvalidRequestException(
-                        "A qualifier cannot be moved to another project; rules in its project depend on it");
+                throw new InvalidRequestException("qualifier", "projectChange")
+                        .with("qualifierId", id)
+                        .with("currentProjectId", projectId)
+                        .with("requestedProjectId", data.getProjectId());
             }
             List<String> changedFields = new ArrayList<>();
             if (data.getCode() != null && !data.getCode().isBlank()) {
@@ -158,7 +160,7 @@ public class FeatureQualifierService {
             s().kv("qualifierId", id);
             if (!qualifierRepository.existsById(id)) {
                 s().kv("found", false);
-                throw new ResourceNotFoundException("FeatureQualifier", "id", id);
+                throw new ResourceNotFoundException("qualifier", "id", id);
             }
             s().kv("found", true);
             qualifierRepository.deleteById(id);
@@ -175,8 +177,9 @@ public class FeatureQualifierService {
         s().f("codeCheck").kv("projectId", projectId).kv("code", code).kv("available", !taken);
         if (taken) {
             s().kv("rejected", "duplicateCode");
-            throw new InvalidRequestException(
-                    "Qualifier with code '" + code + "' already exists in project " + projectId);
+            throw new InvalidRequestException("qualifier", "duplicateCode")
+                    .with("qualifierCode", code)
+                    .with("projectId", projectId);
         }
     }
 

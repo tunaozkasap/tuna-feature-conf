@@ -8,6 +8,7 @@ import com.tuna.feature.conf.model.dto.ProductDto.Response;
 import com.tuna.feature.conf.model.dto.ProductDto.UpdateRequest;
 import com.tuna.feature.conf.persistence.entity.ProductEntity;
 import com.tuna.feature.conf.persistence.repository.ProductRepository;
+import com.tuna.feature.conf.service.exception.InvalidRequestException;
 import com.tuna.feature.conf.service.exception.ResourceNotFoundException;
 import com.tuna.feature.conf.service.util.JpaQueryHelper;
 import lombok.RequiredArgsConstructor;
@@ -56,7 +57,7 @@ public class ProductService {
         try (var get = s().parent("getProduct")) {
             s().kv("productId", id);
             ProductEntity product = productRepository.findById(id)
-                    .orElseThrow(() -> new ResourceNotFoundException("Product", "id", id));
+                    .orElseThrow(() -> new ResourceNotFoundException("product", "id", id));
             s().kv("found", true);
             return CrudResponse.of(toResponse(product));
         }
@@ -67,7 +68,7 @@ public class ProductService {
             CreateRequest data = request.getData();
             if (data == null) {
                 s().kv("rejected", "missingData");
-                throw new IllegalArgumentException("Product payload data is required");
+                throw new InvalidRequestException("product", "missingData");
             }
             s().f("input").kv("name", data.getName()).kv("price", data.getPrice());
 
@@ -87,12 +88,12 @@ public class ProductService {
             UpdateRequest data = request.getData();
             if (data == null) {
                 s().kv("rejected", "missingData");
-                throw new IllegalArgumentException("Product payload data is required");
+                throw new InvalidRequestException("product", "missingData");
             }
             s().f("input").kv("name", data.getName()).kv("price", data.getPrice());
 
             ProductEntity product = productRepository.findById(id)
-                    .orElseThrow(() -> new ResourceNotFoundException("Product", "id", id));
+                    .orElseThrow(() -> new ResourceNotFoundException("product", "id", id));
             s().kv("found", true);
 
             List<String> changedFields = new ArrayList<>();
@@ -117,7 +118,7 @@ public class ProductService {
             s().kv("productId", id);
             if (!productRepository.existsById(id)) {
                 s().kv("found", false);
-                throw new ResourceNotFoundException("Product", "id", id);
+                throw new ResourceNotFoundException("product", "id", id);
             }
             s().kv("found", true);
             productRepository.deleteById(id);

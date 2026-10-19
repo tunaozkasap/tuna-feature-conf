@@ -14,6 +14,7 @@ import com.tuna.feature.conf.persistence.repository.EnvironmentRepository;
 import com.tuna.feature.conf.persistence.repository.FeatureQualifierRepository;
 import com.tuna.feature.conf.persistence.repository.FeatureRepository;
 import com.tuna.feature.conf.persistence.repository.FeatureRuleRepository;
+import com.tuna.feature.conf.service.exception.InvalidRequestException;
 import com.tuna.feature.conf.service.exception.ResourceNotFoundException;
 import com.tuna.feature.conf.service.util.EvidenceMasking;
 import com.tuna.feature.conf.service.util.JpaQueryHelper;
@@ -68,7 +69,7 @@ public class FeatureRuleService {
         try (var get = s().parent("getRule")) {
             s().kv("ruleId", id);
             FeatureRuleEntity entity = ruleRepository.findById(id)
-                    .orElseThrow(() -> new ResourceNotFoundException("FeatureRule", "id", id));
+                    .orElseThrow(() -> new ResourceNotFoundException("rule", "id", id));
             s().kv("found", true);
             return CrudResponse.of(toResponse(entity));
         }
@@ -79,7 +80,7 @@ public class FeatureRuleService {
             CreateRequest data = request.getData();
             if (data == null) {
                 s().kv("rejected", "missingData");
-                throw new IllegalArgumentException("FeatureRule payload data is required");
+                throw new InvalidRequestException("rule", "missingData");
             }
             s().f("input")
                .kv("featureId", data.getFeatureId())
@@ -91,15 +92,15 @@ public class FeatureRuleService {
                .kv("effectiveTo", instantText(data.getEffectiveTo()));
 
             FeatureEntity feature = featureRepository.findById(data.getFeatureId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Feature", "id", data.getFeatureId()));
+                    .orElseThrow(() -> new ResourceNotFoundException("feature", "id", data.getFeatureId()));
             s().kv("featureCode", feature.getCode());
 
             EnvironmentEntity environment = environmentRepository.findById(data.getEnvironmentId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Environment", "id", data.getEnvironmentId()));
+                    .orElseThrow(() -> new ResourceNotFoundException("environment", "id", data.getEnvironmentId()));
             s().kv("environmentCode", environment.getCode());
 
             FeatureQualifierEntity qualifier = qualifierRepository.findById(data.getQualifierId())
-                    .orElseThrow(() -> new ResourceNotFoundException("FeatureQualifier", "id", data.getQualifierId()));
+                    .orElseThrow(() -> new ResourceNotFoundException("qualifier", "id", data.getQualifierId()));
             s().kv("qualifierCode", qualifier.getCode());
 
             FeatureRuleEntity entity = new FeatureRuleEntity();
@@ -128,29 +129,29 @@ public class FeatureRuleService {
             UpdateRequest data = request.getData();
             if (data == null) {
                 s().kv("rejected", "missingData");
-                throw new IllegalArgumentException("FeatureRule payload data is required");
+                throw new InvalidRequestException("rule", "missingData");
             }
 
             FeatureRuleEntity entity = ruleRepository.findById(id)
-                    .orElseThrow(() -> new ResourceNotFoundException("FeatureRule", "id", id));
+                    .orElseThrow(() -> new ResourceNotFoundException("rule", "id", id));
             s().kv("found", true);
 
             List<String> changedFields = new ArrayList<>();
             if (data.getFeatureId() != null) {
                 FeatureEntity feature = featureRepository.findById(data.getFeatureId())
-                        .orElseThrow(() -> new ResourceNotFoundException("Feature", "id", data.getFeatureId()));
+                        .orElseThrow(() -> new ResourceNotFoundException("feature", "id", data.getFeatureId()));
                 entity.setFeature(feature);
                 changedFields.add("featureId");
             }
             if (data.getEnvironmentId() != null) {
                 EnvironmentEntity environment = environmentRepository.findById(data.getEnvironmentId())
-                        .orElseThrow(() -> new ResourceNotFoundException("Environment", "id", data.getEnvironmentId()));
+                        .orElseThrow(() -> new ResourceNotFoundException("environment", "id", data.getEnvironmentId()));
                 entity.setEnvironment(environment);
                 changedFields.add("environmentId");
             }
             if (data.getQualifierId() != null) {
                 FeatureQualifierEntity qualifier = qualifierRepository.findById(data.getQualifierId())
-                        .orElseThrow(() -> new ResourceNotFoundException("FeatureQualifier", "id", data.getQualifierId()));
+                        .orElseThrow(() -> new ResourceNotFoundException("qualifier", "id", data.getQualifierId()));
                 entity.setQualifier(qualifier);
                 changedFields.add("qualifierId");
             }
@@ -198,7 +199,7 @@ public class FeatureRuleService {
             s().kv("ruleId", id);
             if (!ruleRepository.existsById(id)) {
                 s().kv("found", false);
-                throw new ResourceNotFoundException("FeatureRule", "id", id);
+                throw new ResourceNotFoundException("rule", "id", id);
             }
             s().kv("found", true);
             ruleRepository.deleteById(id);
@@ -220,17 +221,19 @@ public class FeatureRuleService {
                 .kv("qualifierProjectId", qualifierProjectId);
         if (!Objects.equals(featureProjectId, environmentProjectId)) {
             projectCheck.kv("passed", false).kv("reason", "environmentInOtherProject");
-            throw new IllegalArgumentException(String.format(
-                    "Environment '%s' belongs to project %s but feature '%s' belongs to project %s",
-                    entity.getEnvironment().getCode(), environmentProjectId,
-                    entity.getFeature().getCode(), featureProjectId));
+            throw new InvalidRequestException("rule", "environmentInOtherProject")
+                    .with("environmentCode", entity.getEnvironment().getCode())
+                    .with("environmentProjectId", environmentProjectId)
+                    .with("featureCode", entity.getFeature().getCode())
+                    .with("featureProjectId", featureProjectId);
         }
         if (!Objects.equals(featureProjectId, qualifierProjectId)) {
             projectCheck.kv("passed", false).kv("reason", "qualifierInOtherProject");
-            throw new IllegalArgumentException(String.format(
-                    "Qualifier '%s' belongs to project %s but feature '%s' belongs to project %s",
-                    entity.getQualifier().getCode(), qualifierProjectId,
-                    entity.getFeature().getCode(), featureProjectId));
+            throw new InvalidRequestException("rule", "qualifierInOtherProject")
+                    .with("qualifierCode", entity.getQualifier().getCode())
+                    .with("qualifierProjectId", qualifierProjectId)
+                    .with("featureCode", entity.getFeature().getCode())
+                    .with("featureProjectId", featureProjectId);
         }
         projectCheck.kv("passed", true);
     }

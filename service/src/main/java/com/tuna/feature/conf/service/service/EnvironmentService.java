@@ -10,6 +10,7 @@ import com.tuna.feature.conf.persistence.entity.ProjectEntity;
 import com.tuna.feature.conf.persistence.repository.EnvironmentRepository;
 import com.tuna.feature.conf.persistence.repository.FeatureRuleRepository;
 import com.tuna.feature.conf.persistence.repository.ProjectRepository;
+import com.tuna.feature.conf.service.exception.InvalidRequestException;
 import com.tuna.feature.conf.service.exception.ResourceNotFoundException;
 import com.tuna.feature.conf.service.util.JpaQueryHelper;
 import lombok.RequiredArgsConstructor;
@@ -60,7 +61,7 @@ public class EnvironmentService {
         try (var get = s().parent("getEnvironment")) {
             s().kv("environmentId", id);
             EnvironmentEntity entity = environmentRepository.findById(id)
-                    .orElseThrow(() -> new ResourceNotFoundException("Environment", "id", id));
+                    .orElseThrow(() -> new ResourceNotFoundException("environment", "id", id));
             s().kv("found", true).kv("code", entity.getCode());
             return CrudResponse.of(toResponse(entity));
         }
@@ -71,16 +72,16 @@ public class EnvironmentService {
             CreateRequest data = request.getData();
             if (data == null) {
                 s().kv("rejected", "missingData");
-                throw new IllegalArgumentException("Environment payload data is required");
+                throw new InvalidRequestException("environment", "missingData");
             }
             recordInput(data.getProjectId(), data.getCode(), data.getName(), data.getDescription());
             if (data.getCode() == null || data.getCode().isBlank()) {
                 s().kv("rejected", "missingCode");
-                throw new IllegalArgumentException("Environment code is required");
+                throw new InvalidRequestException("environment", "missingCode");
             }
 
             ProjectEntity project = projectRepository.findById(data.getProjectId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Project", "id", data.getProjectId()));
+                    .orElseThrow(() -> new ResourceNotFoundException("project", "id", data.getProjectId()));
             s().kv("projectFound", true);
 
             String code = data.getCode().trim().toUpperCase();
@@ -105,12 +106,12 @@ public class EnvironmentService {
             UpdateRequest data = request.getData();
             if (data == null) {
                 s().kv("rejected", "missingData");
-                throw new IllegalArgumentException("Environment payload data is required");
+                throw new InvalidRequestException("environment", "missingData");
             }
             recordInput(null, data.getCode(), data.getName(), data.getDescription());
 
             EnvironmentEntity entity = environmentRepository.findById(id)
-                    .orElseThrow(() -> new ResourceNotFoundException("Environment", "id", id));
+                    .orElseThrow(() -> new ResourceNotFoundException("environment", "id", id));
             s().kv("found", true).kv("currentCode", entity.getCode());
 
             List<String> changedFields = new ArrayList<>();
@@ -143,15 +144,15 @@ public class EnvironmentService {
             s().kv("environmentId", id);
             if (!environmentRepository.existsById(id)) {
                 s().kv("found", false);
-                throw new ResourceNotFoundException("Environment", "id", id);
+                throw new ResourceNotFoundException("environment", "id", id);
             }
             s().kv("found", true);
             boolean hasRules = ruleRepository.existsByEnvironmentId(id);
             s().kv("hasRules", hasRules);
             if (hasRules) {
                 s().kv("rejected", "environmentInUse");
-                throw new IllegalArgumentException(
-                        "Environment " + id + " still has feature rules; delete or move them first");
+                throw new InvalidRequestException("environment", "inUse")
+                        .with("environmentId", id);
             }
             environmentRepository.deleteById(id);
             s().kv("result", "deleted");
@@ -167,8 +168,9 @@ public class EnvironmentService {
         s().f("codeCheck").kv("projectId", projectId).kv("code", code).kv("available", !taken);
         if (taken) {
             s().kv("rejected", "duplicateCode");
-            throw new IllegalArgumentException(
-                    "Environment with code '" + code + "' already exists in project " + projectId);
+            throw new InvalidRequestException("environment", "duplicateCode")
+                    .with("environmentCode", code)
+                    .with("projectId", projectId);
         }
     }
 

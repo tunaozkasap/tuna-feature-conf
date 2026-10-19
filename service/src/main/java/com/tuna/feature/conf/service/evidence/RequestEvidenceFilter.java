@@ -28,6 +28,8 @@ import static com.github.tunaozkasap.execlog.ScopedEvidence.s;
 public class RequestEvidenceFilter extends OncePerRequestFilter {
 
     public static final String REQUEST_ID_HEADER = "X-Request-Id";
+    /** Request attribute holding the request id, for code that answers the request, such as error responses. */
+    public static final String REQUEST_ID_ATTRIBUTE = RequestEvidenceFilter.class.getName() + ".requestId";
 
     private static final Pattern SAFE_REQUEST_ID = Pattern.compile("[A-Za-z0-9._-]{1,64}");
     private static final String[] RECORDED_HEADERS = {HttpHeaders.ACCEPT, HttpHeaders.USER_AGENT, HttpHeaders.ORIGIN,
@@ -39,6 +41,7 @@ public class RequestEvidenceFilter extends OncePerRequestFilter {
         long start = System.currentTimeMillis();
         String requestId = resolveRequestId(request);
         response.setHeader(REQUEST_ID_HEADER, requestId);
+        request.setAttribute(REQUEST_ID_ATTRIBUTE, requestId);
         s().kv("requestId", requestId);
         recordRequest(request);
 

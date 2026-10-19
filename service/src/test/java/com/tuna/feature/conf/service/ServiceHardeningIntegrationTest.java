@@ -55,7 +55,8 @@ public class ServiceHardeningIntegrationTest {
         void rejectsMissingFields() throws Exception {
             send(post("/api/features"), "{\"data\":{\"name\":\"No code\",\"projectId\":" + projectId + "}}")
                     .andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.validationErrors['data.code']").value("Feature code is required"));
+                    .andExpect(jsonPath("$.module").value("Request"))
+                    .andExpect(jsonPath("$.context.fieldErrors['data.code'].message").value("Feature code is required"));
         }
 
         @Test
@@ -63,7 +64,7 @@ public class ServiceHardeningIntegrationTest {
         void rejectsMissingData() throws Exception {
             send(post("/api/features"), "{}")
                     .andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.validationErrors.data").value("Request data is required"));
+                    .andExpect(jsonPath("$.context.fieldErrors.data.message").value("Request data is required"));
         }
     }
 
@@ -111,6 +112,8 @@ public class ServiceHardeningIntegrationTest {
         void integrityViolation() throws Exception {
             mockMvc.perform(delete("/api/projects/" + projectId))
                     .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.status").value(409))
+                    .andExpect(jsonPath("$.module").value("Data"))
                     .andExpect(jsonPath("$.message").value(
                             "The request conflicts with existing data (duplicate value or record still in use)"));
         }
@@ -177,7 +180,9 @@ public class ServiceHardeningIntegrationTest {
         void unknownField() throws Exception {
             search("{\"field\":\"nope\",\"operator\":\"EQUALS\",\"value\":\"x\"}")
                     .andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.message").value("Unknown filter field 'nope'"));
+                    .andExpect(jsonPath("$.module").value("Search"))
+                    .andExpect(jsonPath("$.message").value("Unknown filter field 'nope'."))
+                    .andExpect(jsonPath("$.context.field").value("nope"));
         }
 
         @Test

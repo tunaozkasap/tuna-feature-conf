@@ -1,6 +1,12 @@
 package com.tuna.feature.conf.service.util;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
+
+import java.util.Iterator;
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
@@ -33,6 +39,35 @@ public final class EvidenceMasking {
             return value instanceof String text ? maskEmail(text) : MASK;
         }
         return value;
+    }
+
+    /**
+     * A copy of {@code node} with every field masked by its name, as {@link #maskValue(String, Object)} does, at any
+     * depth. The given node is not changed.
+     */
+    public static ObjectNode maskJson(ObjectNode node) {
+        if (node == null) {
+            return null;
+        }
+        ObjectNode masked = node.objectNode();
+        Iterator<Map.Entry<String, JsonNode>> fields = node.fields();
+        while (fields.hasNext()) {
+            Map.Entry<String, JsonNode> field = fields.next();
+            masked.set(field.getKey(), maskField(field.getKey(), field.getValue()));
+        }
+        return masked;
+    }
+
+    private static JsonNode maskField(String name, JsonNode value) {
+        if (value.isObject()) {
+            return isSecretName(name.toLowerCase(Locale.ROOT)) ? TextNode.valueOf(MASK) : maskJson((ObjectNode) value);
+        }
+        if (value.isNull()) {
+            return value;
+        }
+        Object original = value.isTextual() ? value.asText() : value;
+        Object masked = maskValue(name, original);
+        return masked == original ? value : TextNode.valueOf(String.valueOf(masked));
     }
 
     /**
