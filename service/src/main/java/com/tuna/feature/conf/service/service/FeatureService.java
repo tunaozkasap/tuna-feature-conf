@@ -20,8 +20,11 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+
+import static com.github.tunaozkasap.execlog.ScopedEvidence.s;
 
 @Service
 @RequiredArgsConstructor
@@ -33,97 +36,144 @@ public class FeatureService {
 
     @Transactional(readOnly = true)
     public CrudResponse<Response> search(CrudRequest<?> request) {
-        Specification<FeatureEntity> spec = JpaQueryHelper.toSpecification(request.getFilters());
-        Pageable pageable = JpaQueryHelper.toPageable(request.getPage(), request.getSorts());
+        try (var search = s().parent("searchFeatures")) {
+            Specification<FeatureEntity> spec = JpaQueryHelper.toSpecification(request.getFilters());
+            Pageable pageable = JpaQueryHelper.toPageable(request.getPage(), request.getSorts());
 
-        Page<FeatureEntity> page = (spec != null)
-                ? featureRepository.findAll(spec, pageable)
-                : featureRepository.findAll(pageable);
+            Page<FeatureEntity> page = (spec != null)
+                    ? featureRepository.findAll(spec, pageable)
+                    : featureRepository.findAll(pageable);
 
-        List<Response> items = page.getContent().stream()
-                .map(this::toResponse)
-                .toList();
+            List<Response> items = new ArrayList<>(page.getNumberOfElements());
+            List<Long> ids = new ArrayList<>(page.getNumberOfElements());
+            for (FeatureEntity entity : page.getContent()) {
+                items.add(toResponse(entity));
+                ids.add(entity.getId());
+            }
+            s().kv("returnedIds", ids);
 
-        return CrudResponse.of(items, JpaQueryHelper.toPageResponseVo(page));
+            return CrudResponse.of(items, JpaQueryHelper.toPageResponseVo(page));
+        }
     }
 
     @Transactional(readOnly = true)
     public CrudResponse<Response> getFeatureById(Long id) {
-        FeatureEntity feature = featureRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Feature", "id", id));
-        return CrudResponse.of(toResponse(feature));
+        try (var get = s().parent("getFeature")) {
+            s().kv("featureId", id);
+            FeatureEntity feature = featureRepository.findById(id)
+                    .orElseThrow(() -> new ResourceNotFoundException("Feature", "id", id));
+            s().kv("found", true).kv("code", feature.getCode());
+            return CrudResponse.of(toResponse(feature));
+        }
     }
 
     public CrudResponse<Response> createFeature(CrudRequest<CreateRequest> request) {
-        CreateRequest data = request.getData();
-        if (data == null) {
-            throw new IllegalArgumentException("Feature payload data is required");
+        try (var create = s().parent("createFeature")) {
+            CreateRequest data = request.getData();
+            if (data == null) {
+                s().kv("rejected", "missingData");
+                throw new IllegalArgumentException("Feature payload data is required");
+            }
+            recordInput(data.getProjectId(), data.getCode(), data.getName(), data.getDescription());
+
+            ProjectEntity project = projectRepository.findById(data.getProjectId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Project", "id", data.getProjectId()));
+            s().kv("projectFound", true);
+
+            String code = data.getCode().trim().toUpperCase();
+            s().kv("normalizedCode", code);
+            ensureCodeIsAvailable(project.getId(), code);
+
+            FeatureEntity feature = new FeatureEntity();
+            feature.setCode(code);
+            feature.setName(data.getName());
+            feature.setDescription(data.getDescription());
+            feature.setProject(project);
+
+            FeatureEntity saved = featureRepository.save(feature);
+            s().kv("savedId", saved.getId()).kv("result", "created");
+            return CrudResponse.of(toResponse(saved), "Feature created successfully");
         }
-
-        ProjectEntity project = projectRepository.findById(data.getProjectId())
-                .orElseThrow(() -> new ResourceNotFoundException("Project", "id", data.getProjectId()));
-
-        String code = data.getCode().trim().toUpperCase();
-        ensureCodeIsAvailable(project.getId(), code);
-
-        FeatureEntity feature = new FeatureEntity();
-        feature.setCode(code);
-        feature.setName(data.getName());
-        feature.setDescription(data.getDescription());
-        feature.setProject(project);
-
-        FeatureEntity saved = featureRepository.save(feature);
-        return CrudResponse.of(toResponse(saved), "Feature created successfully");
     }
 
     public CrudResponse<Response> updateFeature(Long id, CrudRequest<UpdateRequest> request) {
-        UpdateRequest data = request.getData();
-        if (data == null) {
-            throw new IllegalArgumentException("Feature payload data is required");
-        }
-
-        FeatureEntity feature = featureRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Feature", "id", id));
-
-        Long projectId = feature.getProject() != null ? feature.getProject().getId() : null;
-        if (data.getProjectId() != null && !Objects.equals(data.getProjectId(), projectId)) {
-            throw new InvalidRequestException(
-                    "A feature cannot be moved to another project; its rules depend on the project's environments and qualifiers");
-        }
-        if (data.getCode() != null && !data.getCode().isBlank()) {
-            String code = data.getCode().trim().toUpperCase();
-            if (!code.equals(feature.getCode())) {
-                ensureCodeIsAvailable(projectId, code);
-                feature.setCode(code);
+        try (var update = s().parent("updateFeature")) {
+            s().kv("featureId", id);
+            UpdateRequest data = request.getData();
+            if (data == null) {
+                s().kv("rejected", "missingData");
+                throw new IllegalArgumentException("Feature payload data is required");
             }
-        }
-        if (data.getName() != null && !data.getName().isBlank()) {
-            feature.setName(data.getName());
-        }
-        if (data.getDescription() != null) {
-            feature.setDescription(data.getDescription());
-        }
+            recordInput(data.getProjectId(), data.getCode(), data.getName(), data.getDescription());
 
-        FeatureEntity saved = featureRepository.save(feature);
-        return CrudResponse.of(toResponse(saved), "Feature updated successfully");
+            FeatureEntity feature = featureRepository.findById(id)
+                    .orElseThrow(() -> new ResourceNotFoundException("Feature", "id", id));
+            s().kv("found", true).kv("currentCode", feature.getCode());
+
+            Long projectId = feature.getProject() != null ? feature.getProject().getId() : null;
+            if (data.getProjectId() != null && !Objects.equals(data.getProjectId(), projectId)) {
+                s().kv("rejected", "projectChange").kv("currentProjectId", projectId);
+                throw new InvalidRequestException(
+                        "A feature cannot be moved to another project; its rules depend on the project's environments and qualifiers");
+            }
+            List<String> changedFields = new ArrayList<>();
+            if (data.getCode() != null && !data.getCode().isBlank()) {
+                String code = data.getCode().trim().toUpperCase();
+                if (!code.equals(feature.getCode())) {
+                    ensureCodeIsAvailable(projectId, code);
+                    feature.setCode(code);
+                    changedFields.add("code");
+                }
+            }
+            if (data.getName() != null && !data.getName().isBlank()) {
+                feature.setName(data.getName());
+                changedFields.add("name");
+            }
+            if (data.getDescription() != null) {
+                feature.setDescription(data.getDescription());
+                changedFields.add("description");
+            }
+            s().kv("changedFields", changedFields);
+
+            FeatureEntity saved = featureRepository.save(feature);
+            s().kv("savedId", saved.getId()).kv("result", "updated");
+            return CrudResponse.of(toResponse(saved), "Feature updated successfully");
+        }
     }
 
     public CrudResponse<Void> deleteFeature(Long id) {
-        if (!featureRepository.existsById(id)) {
-            throw new ResourceNotFoundException("Feature", "id", id);
+        try (var delete = s().parent("deleteFeature")) {
+            s().kv("featureId", id);
+            if (!featureRepository.existsById(id)) {
+                s().kv("found", false);
+                throw new ResourceNotFoundException("Feature", "id", id);
+            }
+            s().kv("found", true);
+            featureRepository.deleteById(id);
+            s().kv("result", "deleted");
+            return CrudResponse.<Void>builder()
+                    .success(true)
+                    .message("Feature deleted successfully")
+                    .build();
         }
-        featureRepository.deleteById(id);
-        return CrudResponse.<Void>builder()
-                .success(true)
-                .message("Feature deleted successfully")
-                .build();
     }
 
     private void ensureCodeIsAvailable(Long projectId, String code) {
-        if (featureRepository.existsByProjectIdAndCode(projectId, code)) {
+        boolean taken = featureRepository.existsByProjectIdAndCode(projectId, code);
+        s().f("codeCheck").kv("projectId", projectId).kv("code", code).kv("available", !taken);
+        if (taken) {
+            s().kv("rejected", "duplicateCode");
             throw new InvalidRequestException(
                     "Feature with code '" + code + "' already exists in project " + projectId);
         }
+    }
+
+    private static void recordInput(Long projectId, String code, String name, String description) {
+        s().f("input")
+           .kv("projectId", projectId)
+           .kv("code", code)
+           .kv("name", name)
+           .kv("descriptionLength", description != null ? description.length() : null);
     }
 
     private Response toResponse(FeatureEntity entity) {

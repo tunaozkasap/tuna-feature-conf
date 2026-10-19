@@ -35,6 +35,16 @@
             <optional>true</optional>
         </dependency>
         <dependency>
+            <groupId>io.github.tunaozkasap</groupId>
+            <artifactId>execution-evidence-logger-core</artifactId>
+            <version>${execution-evidence-logger.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.tunaozkasap</groupId>
+            <artifactId>execution-evidence-logger-logback</artifactId>
+            <version>${execution-evidence-logger.version}</version>
+        </dependency>
+        <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>2.5.0</version>

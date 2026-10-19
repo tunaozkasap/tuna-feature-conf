@@ -16,6 +16,7 @@
     <description>Demo multi-module project</description>
     <properties>
         <java.version>21</java.version>
+        <execution-evidence-logger.version>1.0.0</execution-evidence-logger.version>
     </properties>
     <modules>
         <module>model</module>
