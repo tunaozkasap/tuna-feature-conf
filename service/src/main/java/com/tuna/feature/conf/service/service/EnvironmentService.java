@@ -19,7 +19,10 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
+
+import static com.github.tunaozkasap.execlog.ScopedEvidence.s;
 
 @Service
 @RequiredArgsConstructor
@@ -32,99 +35,149 @@ public class EnvironmentService {
 
     @Transactional(readOnly = true)
     public CrudResponse<Response> search(CrudRequest<?> request) {
-        Specification<EnvironmentEntity> spec = JpaQueryHelper.toSpecification(request.getFilters());
-        Pageable pageable = JpaQueryHelper.toPageable(request.getPage(), request.getSorts());
+        try (var search = s().parent("searchEnvironments")) {
+            Specification<EnvironmentEntity> spec = JpaQueryHelper.toSpecification(request.getFilters());
+            Pageable pageable = JpaQueryHelper.toPageable(request.getPage(), request.getSorts());
 
-        Page<EnvironmentEntity> page = (spec != null)
-                ? environmentRepository.findAll(spec, pageable)
-                : environmentRepository.findAll(pageable);
+            Page<EnvironmentEntity> page = (spec != null)
+                    ? environmentRepository.findAll(spec, pageable)
+                    : environmentRepository.findAll(pageable);
 
-        List<Response> items = page.getContent().stream()
-                .map(this::toResponse)
-                .toList();
+            List<Response> items = new ArrayList<>(page.getNumberOfElements());
+            List<Long> ids = new ArrayList<>(page.getNumberOfElements());
+            for (EnvironmentEntity entity : page.getContent()) {
+                items.add(toResponse(entity));
+                ids.add(entity.getId());
+            }
+            s().kv("returnedIds", ids);
 
-        return CrudResponse.of(items, JpaQueryHelper.toPageResponseVo(page));
+            return CrudResponse.of(items, JpaQueryHelper.toPageResponseVo(page));
+        }
     }
 
     @Transactional(readOnly = true)
     public CrudResponse<Response> getEnvironmentById(Long id) {
-        EnvironmentEntity entity = environmentRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Environment", "id", id));
-        return CrudResponse.of(toResponse(entity));
+        try (var get = s().parent("getEnvironment")) {
+            s().kv("environmentId", id);
+            EnvironmentEntity entity = environmentRepository.findById(id)
+                    .orElseThrow(() -> new ResourceNotFoundException("Environment", "id", id));
+            s().kv("found", true).kv("code", entity.getCode());
+            return CrudResponse.of(toResponse(entity));
+        }
     }
 
     public CrudResponse<Response> createEnvironment(CrudRequest<CreateRequest> request) {
-        CreateRequest data = request.getData();
-        if (data == null) {
-            throw new IllegalArgumentException("Environment payload data is required");
+        try (var create = s().parent("createEnvironment")) {
+            CreateRequest data = request.getData();
+            if (data == null) {
+                s().kv("rejected", "missingData");
+                throw new IllegalArgumentException("Environment payload data is required");
+            }
+            recordInput(data.getProjectId(), data.getCode(), data.getName(), data.getDescription());
+            if (data.getCode() == null || data.getCode().isBlank()) {
+                s().kv("rejected", "missingCode");
+                throw new IllegalArgumentException("Environment code is required");
+            }
+
+            ProjectEntity project = projectRepository.findById(data.getProjectId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Project", "id", data.getProjectId()));
+            s().kv("projectFound", true);
+
+            String code = data.getCode().trim().toUpperCase();
+            s().kv("normalizedCode", code);
+            ensureCodeIsAvailable(project.getId(), code);
+
+            EnvironmentEntity entity = new EnvironmentEntity();
+            entity.setCode(code);
+            entity.setName(data.getName());
+            entity.setDescription(data.getDescription());
+            entity.setProject(project);
+
+            EnvironmentEntity saved = environmentRepository.save(entity);
+            s().kv("savedId", saved.getId()).kv("result", "created");
+            return CrudResponse.of(toResponse(saved), "Environment created successfully");
         }
-        if (data.getCode() == null || data.getCode().isBlank()) {
-            throw new IllegalArgumentException("Environment code is required");
-        }
-
-        ProjectEntity project = projectRepository.findById(data.getProjectId())
-                .orElseThrow(() -> new ResourceNotFoundException("Project", "id", data.getProjectId()));
-
-        String code = data.getCode().trim().toUpperCase();
-        ensureCodeIsAvailable(project.getId(), code);
-
-        EnvironmentEntity entity = new EnvironmentEntity();
-        entity.setCode(code);
-        entity.setName(data.getName());
-        entity.setDescription(data.getDescription());
-        entity.setProject(project);
-
-        EnvironmentEntity saved = environmentRepository.save(entity);
-        return CrudResponse.of(toResponse(saved), "Environment created successfully");
     }
 
     public CrudResponse<Response> updateEnvironment(Long id, CrudRequest<UpdateRequest> request) {
-        UpdateRequest data = request.getData();
-        if (data == null) {
-            throw new IllegalArgumentException("Environment payload data is required");
-        }
-
-        EnvironmentEntity entity = environmentRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Environment", "id", id));
-
-        if (data.getCode() != null && !data.getCode().isBlank()) {
-            String code = data.getCode().trim().toUpperCase();
-            if (!code.equals(entity.getCode())) {
-                ensureCodeIsAvailable(entity.getProject().getId(), code);
-                entity.setCode(code);
+        try (var update = s().parent("updateEnvironment")) {
+            s().kv("environmentId", id);
+            UpdateRequest data = request.getData();
+            if (data == null) {
+                s().kv("rejected", "missingData");
+                throw new IllegalArgumentException("Environment payload data is required");
             }
-        }
-        if (data.getName() != null && !data.getName().isBlank()) {
-            entity.setName(data.getName());
-        }
-        if (data.getDescription() != null) {
-            entity.setDescription(data.getDescription());
-        }
+            recordInput(null, data.getCode(), data.getName(), data.getDescription());
 
-        EnvironmentEntity saved = environmentRepository.save(entity);
-        return CrudResponse.of(toResponse(saved), "Environment updated successfully");
+            EnvironmentEntity entity = environmentRepository.findById(id)
+                    .orElseThrow(() -> new ResourceNotFoundException("Environment", "id", id));
+            s().kv("found", true).kv("currentCode", entity.getCode());
+
+            List<String> changedFields = new ArrayList<>();
+            if (data.getCode() != null && !data.getCode().isBlank()) {
+                String code = data.getCode().trim().toUpperCase();
+                if (!code.equals(entity.getCode())) {
+                    ensureCodeIsAvailable(entity.getProject().getId(), code);
+                    entity.setCode(code);
+                    changedFields.add("code");
+                }
+            }
+            if (data.getName() != null && !data.getName().isBlank()) {
+                entity.setName(data.getName());
+                changedFields.add("name");
+            }
+            if (data.getDescription() != null) {
+                entity.setDescription(data.getDescription());
+                changedFields.add("description");
+            }
+            s().kv("changedFields", changedFields);
+
+            EnvironmentEntity saved = environmentRepository.save(entity);
+            s().kv("savedId", saved.getId()).kv("result", "updated");
+            return CrudResponse.of(toResponse(saved), "Environment updated successfully");
+        }
     }
 
     public CrudResponse<Void> deleteEnvironment(Long id) {
-        if (!environmentRepository.existsById(id)) {
-            throw new ResourceNotFoundException("Environment", "id", id);
+        try (var delete = s().parent("deleteEnvironment")) {
+            s().kv("environmentId", id);
+            if (!environmentRepository.existsById(id)) {
+                s().kv("found", false);
+                throw new ResourceNotFoundException("Environment", "id", id);
+            }
+            s().kv("found", true);
+            boolean hasRules = ruleRepository.existsByEnvironmentId(id);
+            s().kv("hasRules", hasRules);
+            if (hasRules) {
+                s().kv("rejected", "environmentInUse");
+                throw new IllegalArgumentException(
+                        "Environment " + id + " still has feature rules; delete or move them first");
+            }
+            environmentRepository.deleteById(id);
+            s().kv("result", "deleted");
+            return CrudResponse.<Void>builder()
+                    .success(true)
+                    .message("Environment deleted successfully")
+                    .build();
         }
-        if (ruleRepository.existsByEnvironmentId(id)) {
-            throw new IllegalArgumentException(
-                    "Environment " + id + " still has feature rules; delete or move them first");
-        }
-        environmentRepository.deleteById(id);
-        return CrudResponse.<Void>builder()
-                .success(true)
-                .message("Environment deleted successfully")
-                .build();
     }
 
     private void ensureCodeIsAvailable(Long projectId, String code) {
-        if (environmentRepository.existsByProjectIdAndCode(projectId, code)) {
+        boolean taken = environmentRepository.existsByProjectIdAndCode(projectId, code);
+        s().f("codeCheck").kv("projectId", projectId).kv("code", code).kv("available", !taken);
+        if (taken) {
+            s().kv("rejected", "duplicateCode");
             throw new IllegalArgumentException(
                     "Environment with code '" + code + "' already exists in project " + projectId);
         }
+    }
+
+    private static void recordInput(Long projectId, String code, String name, String description) {
+        s().f("input")
+           .kv("projectId", projectId)
+           .kv("code", code)
+           .kv("name", name)
+           .kv("descriptionLength", description != null ? description.length() : null);
     }
 
     private Response toResponse(EnvironmentEntity entity) {
