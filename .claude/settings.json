@@ -1,0 +1,10 @@
+{
+  "extraKnownMarketplaces": {
+    "tuna-plugins": {
+      "source": { "source": "github", "repo": "tunaozkasap/my-claude-plugins" }
+    }
+  },
+  "enabledPlugins": {
+    "core@tuna-plugins": true
+  }
+}
