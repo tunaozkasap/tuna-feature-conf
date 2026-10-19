@@ -10,6 +10,7 @@ import com.tuna.feature.conf.persistence.entity.FeatureQualifierEntity;
 import com.tuna.feature.conf.persistence.entity.ProjectEntity;
 import com.tuna.feature.conf.persistence.repository.FeatureQualifierRepository;
 import com.tuna.feature.conf.persistence.repository.ProjectRepository;
+import com.tuna.feature.conf.service.exception.InvalidRequestException;
 import com.tuna.feature.conf.service.exception.ResourceNotFoundException;
 import com.tuna.feature.conf.service.util.JpaQueryHelper;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -61,8 +63,11 @@ public class FeatureQualifierService {
         ProjectEntity project = projectRepository.findById(data.getProjectId())
                 .orElseThrow(() -> new ResourceNotFoundException("Project", "id", data.getProjectId()));
 
+        String code = data.getCode().trim().toUpperCase();
+        ensureCodeIsAvailable(project.getId(), code);
+
         FeatureQualifierEntity entity = new FeatureQualifierEntity();
-        entity.setCode(data.getCode().toUpperCase());
+        entity.setCode(code);
         entity.setName(data.getName());
         entity.setDescription(data.getDescription());
         entity.setPriority(data.getPriority() != null ? data.getPriority() : 0);
@@ -82,8 +87,17 @@ public class FeatureQualifierService {
         FeatureQualifierEntity entity = qualifierRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("FeatureQualifier", "id", id));
 
+        Long projectId = entity.getProject() != null ? entity.getProject().getId() : null;
+        if (data.getProjectId() != null && !Objects.equals(data.getProjectId(), projectId)) {
+            throw new InvalidRequestException(
+                    "A qualifier cannot be moved to another project; rules in its project depend on it");
+        }
         if (data.getCode() != null && !data.getCode().isBlank()) {
-            entity.setCode(data.getCode().toUpperCase());
+            String code = data.getCode().trim().toUpperCase();
+            if (!code.equals(entity.getCode())) {
+                ensureCodeIsAvailable(projectId, code);
+                entity.setCode(code);
+            }
         }
         if (data.getName() != null && !data.getName().isBlank()) {
             entity.setName(data.getName());
@@ -96,11 +110,6 @@ public class FeatureQualifierService {
         }
         if (data.getValueType() != null) {
             entity.setValueType(data.getValueType());
-        }
-        if (data.getProjectId() != null) {
-            ProjectEntity project = projectRepository.findById(data.getProjectId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Project", "id", data.getProjectId()));
-            entity.setProject(project);
         }
 
         FeatureQualifierEntity saved = qualifierRepository.save(entity);
@@ -116,6 +125,13 @@ public class FeatureQualifierService {
                 .success(true)
                 .message("FeatureQualifier deleted successfully")
                 .build();
+    }
+
+    private void ensureCodeIsAvailable(Long projectId, String code) {
+        if (qualifierRepository.existsByProjectIdAndCode(projectId, code)) {
+            throw new InvalidRequestException(
+                    "Qualifier with code '" + code + "' already exists in project " + projectId);
+        }
     }
 
     private Response toResponse(FeatureQualifierEntity entity) {

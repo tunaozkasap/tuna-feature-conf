@@ -13,4 +13,5 @@ public interface FeatureQualifierRepository extends JpaRepository<FeatureQualifi
     List<FeatureQualifierEntity> findByProjectId(Long projectId);
     List<FeatureQualifierEntity> findByProjectIdOrderByPriorityDesc(Long projectId);
     Optional<FeatureQualifierEntity> findByProjectIdAndCode(Long projectId, String code);
+    boolean existsByProjectIdAndCode(Long projectId, String code);
 }

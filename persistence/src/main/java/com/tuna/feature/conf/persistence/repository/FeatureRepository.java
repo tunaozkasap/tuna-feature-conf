@@ -12,5 +12,5 @@ import java.util.Optional;
 public interface FeatureRepository extends JpaRepository<FeatureEntity, Long>, JpaSpecificationExecutor<FeatureEntity> {
     List<FeatureEntity> findByProjectId(Long projectId);
     Optional<FeatureEntity> findByProjectIdAndCode(Long projectId, String code);
-    Optional<FeatureEntity> findByCode(String code);
+    boolean existsByProjectIdAndCode(Long projectId, String code);
 }

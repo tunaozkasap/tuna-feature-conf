@@ -3,6 +3,8 @@ package com.tuna.feature.conf.model.crud;
 import com.tuna.feature.conf.model.vo.FilterVo;
 import com.tuna.feature.conf.model.vo.PageVo;
 import com.tuna.feature.conf.model.vo.SortVo;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -16,6 +18,12 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CrudRequest<T> {
+    /**
+     * Payload of the request. Validated (including its nested constraints) wherever
+     * the controller parameter is annotated with {@code @Valid}.
+     */
+    @Valid
+    @NotNull(message = "Request data is required")
     private T data;
     @Builder.Default
     private PageVo page = new PageVo();

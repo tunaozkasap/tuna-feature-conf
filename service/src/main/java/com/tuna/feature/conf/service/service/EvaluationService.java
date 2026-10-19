@@ -9,7 +9,6 @@ import com.tuna.feature.conf.persistence.entity.FeatureEntity;
 import com.tuna.feature.conf.persistence.entity.FeatureQualifierEntity;
 import com.tuna.feature.conf.persistence.entity.FeatureRuleEntity;
 import com.tuna.feature.conf.persistence.repository.EnvironmentRepository;
-import com.tuna.feature.conf.persistence.repository.FeatureQualifierRepository;
 import com.tuna.feature.conf.persistence.repository.FeatureRepository;
 import com.tuna.feature.conf.persistence.repository.FeatureRuleRepository;
 import com.tuna.feature.conf.service.exception.ResourceNotFoundException;
@@ -21,7 +20,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -30,13 +28,15 @@ public class EvaluationService {
 
         private final FeatureRepository featureRepository;
         private final FeatureRuleRepository ruleRepository;
-        private final FeatureQualifierRepository qualifierRepository;
         private final EnvironmentRepository environmentRepository;
 
         public CrudResponse<Response> evaluateFeature(CrudRequest<Request> crudRequest) {
                 Request request = crudRequest.getData();
                 if (request == null || request.getFeatureCode() == null || request.getFeatureCode().isBlank()) {
                         throw new IllegalArgumentException("Feature code is required for evaluation");
+                }
+                if (request.getProjectId() == null) {
+                        throw new IllegalArgumentException("Project ID is required for evaluation");
                 }
                 if (request.getEnvironmentCode() == null || request.getEnvironmentCode().isBlank()) {
                         throw new IllegalArgumentException("Environment code is required for evaluation");
@@ -46,12 +46,10 @@ public class EvaluationService {
                 logs.add(String.format("Evaluating feature code '%s' for project ID %s in environment '%s'",
                                 request.getFeatureCode(), request.getProjectId(), request.getEnvironmentCode()));
 
-                Optional<FeatureEntity> featureOpt = (request.getProjectId() != null)
-                                ? featureRepository.findByProjectIdAndCode(request.getProjectId(),
-                                                request.getFeatureCode().toUpperCase())
-                                : featureRepository.findByCode(request.getFeatureCode().toUpperCase());
-
-                FeatureEntity feature = featureOpt.orElseThrow(
+                FeatureEntity feature = featureRepository
+                                .findByProjectIdAndCode(request.getProjectId(),
+                                                request.getFeatureCode().trim().toUpperCase())
+                                .orElseThrow(
                                 () -> new ResourceNotFoundException("Feature", "code", request.getFeatureCode()));
 
                 String environmentCode = request.getEnvironmentCode().trim().toUpperCase();
