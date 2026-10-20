@@ -1,0 +1,515 @@
+{
+  "about": "Demo data loaded into the empty database at startup by DemoDataSeeder (app.seed.enabled). Codes are written upper case, as the API stores them. Rule fields: environment and qualifier are codes of the same project; enabled defaults to true and priority to 0; effectiveFrom / effectiveTo are 'now', 'now+7d', 'now-3h' (days or hours relative to startup) or an ISO instant, or left out for no limit.",
+  "projects": [
+    {
+      "name": "Storefront Web",
+      "description": "Customer-facing online shop: catalogue, cart, checkout and campaigns for TR, DE and NL.",
+      "environments": [
+        { "code": "DEV", "name": "Development", "description": "Shared development cluster, deployed on every merge." },
+        { "code": "QA", "name": "Quality Assurance", "description": "Manual and automated regression testing." },
+        { "code": "STAGING", "name": "Staging", "description": "Production-like, used for release candidates and campaign previews." },
+        { "code": "PROD", "name": "Production", "description": "Live shop at www.storefront.example." }
+      ],
+      "qualifiers": [
+        { "code": "USER_ID", "name": "Customer ID", "valueType": "TEXT", "priority": 100, "description": "A single customer account, e.g. cust-10001. Used for internal testers and opt-outs." },
+        { "code": "BETA_TESTER", "name": "Beta tester", "valueType": "BOOLEAN", "priority": 90, "description": "true for customers enrolled in the beta programme." },
+        { "code": "CUSTOMER_TIER", "name": "Loyalty tier", "valueType": "TEXT", "priority": 70, "description": "STANDARD, SILVER, GOLD or PLATINUM." },
+        { "code": "STORE_ID", "name": "Physical store", "valueType": "NUMERIC", "priority": 60, "description": "Store number for click & collect orders." },
+        { "code": "COUNTRY", "name": "Country", "valueType": "TEXT", "priority": 50, "description": "Shipping country, ISO 3166 alpha-2 (TR, DE, NL)." },
+        { "code": "AB_GROUP", "name": "A/B bucket", "valueType": "TEXT", "priority": 40, "description": "Experiment bucket A, B or C, assigned per visitor." },
+        { "code": "DEVICE_TYPE", "name": "Device type", "valueType": "TEXT", "priority": 30, "description": "DESKTOP, MOBILE or TABLET." },
+        { "code": "EXPERIMENT_CONTEXT", "name": "Experiment context", "valueType": "JSON", "priority": 10, "description": "JSON sent by the experimentation SDK, matched as a whole." }
+      ],
+      "features": [
+        {
+          "code": "NEW_CHECKOUT", "name": "New checkout flow", "description": "Single-page checkout replacing the four-step wizard.",
+          "rules": [
+            { "environment": "DEV", "qualifier": "BETA_TESTER", "qualifierValue": "true", "featureValue": "true", "description": "Everyone testing in DEV" },
+            { "environment": "DEV", "qualifier": "COUNTRY", "qualifierValue": "TR", "featureValue": "true" },
+            { "environment": "QA", "qualifier": "BETA_TESTER", "qualifierValue": "true", "featureValue": "true" },
+            { "environment": "QA", "qualifier": "DEVICE_TYPE", "qualifierValue": "DESKTOP", "featureValue": "true", "description": "Regression suite runs on desktop" },
+            { "environment": "STAGING", "qualifier": "CUSTOMER_TIER", "qualifierValue": "GOLD", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "USER_ID", "qualifierValue": "cust-10001", "featureValue": "true", "description": "Internal QA account" },
+            { "environment": "PROD", "qualifier": "USER_ID", "qualifierValue": "cust-20417", "featureValue": "false", "priority": 10, "description": "Opted out after a payment issue (ticket SUP-4821)" },
+            { "environment": "PROD", "qualifier": "BETA_TESTER", "qualifierValue": "true", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "COUNTRY", "qualifierValue": "TR", "featureValue": "true", "effectiveFrom": "now-21d", "description": "Rolled out in Türkiye" },
+            { "environment": "PROD", "qualifier": "COUNTRY", "qualifierValue": "DE", "featureValue": "true", "effectiveFrom": "now+10d", "description": "Germany roll-out, scheduled" }
+          ]
+        },
+        {
+          "code": "ONE_CLICK_BUY", "name": "One-click buy", "description": "Buy with the saved card and address straight from the product page.",
+          "rules": [
+            { "environment": "DEV", "qualifier": "BETA_TESTER", "qualifierValue": "true", "featureValue": "true" },
+            { "environment": "STAGING", "qualifier": "CUSTOMER_TIER", "qualifierValue": "PLATINUM", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "CUSTOMER_TIER", "qualifierValue": "PLATINUM", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "CUSTOMER_TIER", "qualifierValue": "GOLD", "featureValue": "true", "enabled": false, "description": "Paused during the chargeback rate review" }
+          ]
+        },
+        {
+          "code": "DARK_MODE", "name": "Dark mode", "description": "Dark colour scheme following the device setting.",
+          "rules": [
+            { "environment": "DEV", "qualifier": "DEVICE_TYPE", "qualifierValue": "MOBILE", "featureValue": "true" },
+            { "environment": "DEV", "qualifier": "DEVICE_TYPE", "qualifierValue": "DESKTOP", "featureValue": "true" },
+            { "environment": "QA", "qualifier": "DEVICE_TYPE", "qualifierValue": "MOBILE", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "DEVICE_TYPE", "qualifierValue": "MOBILE", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "BETA_TESTER", "qualifierValue": "true", "featureValue": "true" }
+          ]
+        },
+        {
+          "code": "PRODUCT_RECOMMENDATIONS", "name": "Recommendation engine", "description": "Which engine fills the 'You may also like' carousel.",
+          "rules": [
+            { "environment": "DEV", "qualifier": "AB_GROUP", "qualifierValue": "A", "featureValue": "collaborative-v1" },
+            { "environment": "DEV", "qualifier": "AB_GROUP", "qualifierValue": "B", "featureValue": "embedding-v2" },
+            { "environment": "STAGING", "qualifier": "AB_GROUP", "qualifierValue": "B", "featureValue": "embedding-v2" },
+            { "environment": "PROD", "qualifier": "AB_GROUP", "qualifierValue": "A", "featureValue": "collaborative-v1" },
+            { "environment": "PROD", "qualifier": "AB_GROUP", "qualifierValue": "B", "featureValue": "embedding-v2", "effectiveFrom": "now-7d", "description": "50/50 experiment, week 2" },
+            { "environment": "PROD", "qualifier": "COUNTRY", "qualifierValue": "TR", "featureValue": "embedding-v2", "effectiveFrom": "now-60d", "effectiveTo": "now-1d", "description": "Türkiye pilot, finished" }
+          ]
+        },
+        {
+          "code": "FREE_SHIPPING_THRESHOLD", "name": "Free shipping threshold", "description": "Order total (local currency) from which shipping is free.",
+          "rules": [
+            { "environment": "DEV", "qualifier": "COUNTRY", "qualifierValue": "TR", "featureValue": "750" },
+            { "environment": "STAGING", "qualifier": "COUNTRY", "qualifierValue": "DE", "featureValue": "49" },
+            { "environment": "PROD", "qualifier": "CUSTOMER_TIER", "qualifierValue": "PLATINUM", "featureValue": "0", "description": "Platinum always ships free" },
+            { "environment": "PROD", "qualifier": "CUSTOMER_TIER", "qualifierValue": "GOLD", "featureValue": "25" },
+            { "environment": "PROD", "qualifier": "COUNTRY", "qualifierValue": "TR", "featureValue": "750" },
+            { "environment": "PROD", "qualifier": "COUNTRY", "qualifierValue": "DE", "featureValue": "49" },
+            { "environment": "PROD", "qualifier": "COUNTRY", "qualifierValue": "NL", "featureValue": "39" }
+          ]
+        },
+        {
+          "code": "MAX_CART_ITEMS", "name": "Maximum cart items", "description": "Number of line items a cart can hold.",
+          "rules": [
+            { "environment": "QA", "qualifier": "CUSTOMER_TIER", "qualifierValue": "STANDARD", "featureValue": "5", "description": "Small on purpose, to test the limit message" },
+            { "environment": "PROD", "qualifier": "CUSTOMER_TIER", "qualifierValue": "STANDARD", "featureValue": "50" },
+            { "environment": "PROD", "qualifier": "CUSTOMER_TIER", "qualifierValue": "SILVER", "featureValue": "75" },
+            { "environment": "PROD", "qualifier": "CUSTOMER_TIER", "qualifierValue": "GOLD", "featureValue": "100" },
+            { "environment": "PROD", "qualifier": "CUSTOMER_TIER", "qualifierValue": "PLATINUM", "featureValue": "250" }
+          ]
+        },
+        {
+          "code": "HOMEPAGE_HERO_BANNER", "name": "Homepage hero banner", "description": "Campaign banner shown at the top of the homepage, as JSON.",
+          "rules": [
+            { "environment": "STAGING", "qualifier": "COUNTRY", "qualifierValue": "TR", "featureValue": "{\"campaign\":\"11.11\",\"title\":\"11.11 Büyük İndirim\",\"imageUrl\":\"/banners/1111-tr.jpg\",\"ctaText\":\"Fırsatları gör\",\"ctaUrl\":\"/kampanya/1111\"}", "description": "Preview of the 11.11 campaign" },
+            { "environment": "PROD", "qualifier": "COUNTRY", "qualifierValue": "TR", "featureValue": "{\"campaign\":\"11.11\",\"title\":\"11.11 Büyük İndirim\",\"imageUrl\":\"/banners/1111-tr.jpg\",\"ctaText\":\"Fırsatları gör\",\"ctaUrl\":\"/kampanya/1111\"}", "effectiveFrom": "now+8d", "effectiveTo": "now+12d", "description": "11.11 campaign, scheduled" },
+            { "environment": "PROD", "qualifier": "COUNTRY", "qualifierValue": "DE", "featureValue": "{\"campaign\":\"autumn-sale\",\"title\":\"Herbst-Sale: bis zu 40 %\",\"imageUrl\":\"/banners/autumn-de.jpg\",\"ctaText\":\"Jetzt sparen\",\"ctaUrl\":\"/sale/herbst\"}", "effectiveFrom": "now-5d", "effectiveTo": "now+9d", "description": "Autumn sale, running" },
+            { "environment": "PROD", "qualifier": "COUNTRY", "qualifierValue": "NL", "featureValue": "{\"campaign\":\"summer-sale\",\"title\":\"Zomer-sale\",\"imageUrl\":\"/banners/summer-nl.jpg\",\"ctaText\":\"Bekijk aanbiedingen\",\"ctaUrl\":\"/sale/zomer\"}", "effectiveFrom": "now-100d", "effectiveTo": "now-40d", "description": "Summer sale, ended" }
+          ]
+        },
+        {
+          "code": "GIFT_WRAPPING", "name": "Gift wrapping", "description": "Offer paid gift wrapping at checkout.",
+          "rules": [
+            { "environment": "DEV", "qualifier": "BETA_TESTER", "qualifierValue": "true", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "COUNTRY", "qualifierValue": "DE", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "COUNTRY", "qualifierValue": "NL", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "COUNTRY", "qualifierValue": "TR", "featureValue": "true", "effectiveFrom": "now+30d", "description": "Holiday season in Türkiye" }
+          ]
+        },
+        {
+          "code": "PAY_IN_INSTALMENTS", "name": "Pay in instalments", "description": "Instalment counts offered for card payments, comma separated.",
+          "rules": [
+            { "environment": "DEV", "qualifier": "COUNTRY", "qualifierValue": "TR", "featureValue": "3,6,9,12" },
+            { "environment": "PROD", "qualifier": "COUNTRY", "qualifierValue": "TR", "featureValue": "3,6,9,12" },
+            { "environment": "PROD", "qualifier": "COUNTRY", "qualifierValue": "DE", "featureValue": "3" },
+            { "environment": "PROD", "qualifier": "CUSTOMER_TIER", "qualifierValue": "PLATINUM", "featureValue": "3,6,9,12,18", "description": "Longer plans for platinum" }
+          ]
+        },
+        {
+          "code": "CLICK_AND_COLLECT", "name": "Click & collect", "description": "Pick up online orders in a physical store.",
+          "rules": [
+            { "environment": "STAGING", "qualifier": "STORE_ID", "qualifierValue": "9001", "featureValue": "true", "description": "Test store" },
+            { "environment": "PROD", "qualifier": "STORE_ID", "qualifierValue": "1042", "featureValue": "true", "description": "Istanbul Kanyon" },
+            { "environment": "PROD", "qualifier": "STORE_ID", "qualifierValue": "1077", "featureValue": "true", "description": "Ankara Panora" },
+            { "environment": "PROD", "qualifier": "STORE_ID", "qualifierValue": "2003", "featureValue": "true", "description": "Berlin Alexa" },
+            { "environment": "PROD", "qualifier": "STORE_ID", "qualifierValue": "2011", "featureValue": "true", "enabled": false, "description": "Hamburg, closed for renovation" }
+          ]
+        },
+        {
+          "code": "LIVE_CHAT_WIDGET", "name": "Live chat widget", "description": "Chat bubble connecting to a support agent.",
+          "rules": [
+            { "environment": "PROD", "qualifier": "CUSTOMER_TIER", "qualifierValue": "GOLD", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "CUSTOMER_TIER", "qualifierValue": "PLATINUM", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "DEVICE_TYPE", "qualifierValue": "DESKTOP", "featureValue": "true", "effectiveFrom": "now-2d", "effectiveTo": "now+5d", "description": "Load test with all desktop visitors this week" }
+          ]
+        },
+        {
+          "code": "SEARCH_AUTOCOMPLETE", "name": "Search autocomplete", "description": "Autocomplete strategy for the search box: prefix or fuzzy.",
+          "rules": [
+            { "environment": "DEV", "qualifier": "BETA_TESTER", "qualifierValue": "true", "featureValue": "fuzzy" },
+            { "environment": "PROD", "qualifier": "AB_GROUP", "qualifierValue": "C", "featureValue": "fuzzy" },
+            { "environment": "PROD", "qualifier": "COUNTRY", "qualifierValue": "TR", "featureValue": "fuzzy", "description": "Handles Turkish characters better" },
+            { "environment": "PROD", "qualifier": "COUNTRY", "qualifierValue": "DE", "featureValue": "prefix" }
+          ]
+        },
+        {
+          "code": "PRICE_DISPLAY_VARIANT", "name": "Price display variant", "description": "How prices are shown on product cards.",
+          "rules": [
+            { "environment": "PROD", "qualifier": "EXPERIMENT_CONTEXT", "qualifierValue": "{\"experiment\":\"price-display\",\"variant\":\"B\"}", "featureValue": "unit-price-first" },
+            { "environment": "PROD", "qualifier": "EXPERIMENT_CONTEXT", "qualifierValue": "{\"experiment\":\"price-display\",\"variant\":\"A\"}", "featureValue": "total-price-first" }
+          ]
+        },
+        {
+          "code": "PRODUCT_VIDEO_REVIEWS", "name": "Video reviews", "description": "Let customers upload short videos with their reviews. Not configured yet.",
+          "rules": []
+        }
+      ]
+    },
+    {
+      "name": "Mobile Banking App",
+      "description": "iOS and Android banking app for retail, premier and business customers.",
+      "environments": [
+        { "code": "DEV", "name": "Development", "description": "Developer builds against mocked core banking." },
+        { "code": "SIT", "name": "System Integration Test", "description": "Integrated with the core banking test system." },
+        { "code": "UAT", "name": "User Acceptance Test", "description": "Business sign-off before release." },
+        { "code": "PREPROD", "name": "Pre-production", "description": "Production data copy, release dress rehearsal." },
+        { "code": "PROD", "name": "Production", "description": "App store builds used by customers." }
+      ],
+      "qualifiers": [
+        { "code": "CUSTOMER_ID", "name": "Customer number", "valueType": "TEXT", "priority": 100, "description": "Core banking customer number, e.g. C-0048213." },
+        { "code": "EMPLOYEE", "name": "Bank employee", "valueType": "BOOLEAN", "priority": 95, "description": "true for staff accounts (dogfooding)." },
+        { "code": "APP_PLATFORM", "name": "App platform", "valueType": "TEXT", "priority": 60, "description": "IOS or ANDROID." },
+        { "code": "APP_VERSION", "name": "App version", "valueType": "TEXT", "priority": 55, "description": "Exact app version, e.g. 5.12.0." },
+        { "code": "ACCOUNT_TYPE", "name": "Account type", "valueType": "TEXT", "priority": 50, "description": "RETAIL, PREMIER, BUSINESS or STUDENT." },
+        { "code": "REGION", "name": "Region", "valueType": "TEXT", "priority": 40, "description": "Licence region: TR, EU or UK." },
+        { "code": "KYC_LEVEL", "name": "KYC level", "valueType": "NUMERIC", "priority": 30, "description": "Know-your-customer verification level, 1 to 3." }
+      ],
+      "features": [
+        {
+          "code": "BIOMETRIC_LOGIN", "name": "Biometric login", "description": "Face ID / fingerprint login instead of the PIN.",
+          "rules": [
+            { "environment": "DEV", "qualifier": "APP_PLATFORM", "qualifierValue": "IOS", "featureValue": "true" },
+            { "environment": "DEV", "qualifier": "APP_PLATFORM", "qualifierValue": "ANDROID", "featureValue": "true" },
+            { "environment": "UAT", "qualifier": "EMPLOYEE", "qualifierValue": "true", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "APP_PLATFORM", "qualifierValue": "IOS", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "APP_PLATFORM", "qualifierValue": "ANDROID", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "APP_VERSION", "qualifierValue": "5.9.3", "featureValue": "false", "priority": 10, "description": "Crash on Android 14 in this build" }
+          ]
+        },
+        {
+          "code": "INSTANT_TRANSFERS", "name": "Instant transfers", "description": "Send money to other banks in seconds, around the clock.",
+          "rules": [
+            { "environment": "SIT", "qualifier": "REGION", "qualifierValue": "TR", "featureValue": "true" },
+            { "environment": "UAT", "qualifier": "REGION", "qualifierValue": "TR", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "REGION", "qualifierValue": "TR", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "REGION", "qualifierValue": "EU", "featureValue": "true", "effectiveFrom": "now-14d", "description": "SEPA Instant go-live" },
+            { "environment": "PROD", "qualifier": "REGION", "qualifierValue": "UK", "featureValue": "true", "effectiveFrom": "now+21d", "description": "Faster Payments, waiting for scheme approval" }
+          ]
+        },
+        {
+          "code": "CARD_FREEZE", "name": "Freeze card", "description": "Temporarily block and unblock a card from the app.",
+          "rules": [
+            { "environment": "PROD", "qualifier": "ACCOUNT_TYPE", "qualifierValue": "RETAIL", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "ACCOUNT_TYPE", "qualifierValue": "PREMIER", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "ACCOUNT_TYPE", "qualifierValue": "STUDENT", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "ACCOUNT_TYPE", "qualifierValue": "BUSINESS", "featureValue": "true", "effectiveFrom": "now+7d", "description": "Business cards after the card processor upgrade" }
+          ]
+        },
+        {
+          "code": "SPENDING_INSIGHTS", "name": "Spending insights", "description": "Monthly categorised spending charts.",
+          "rules": [
+            { "environment": "UAT", "qualifier": "EMPLOYEE", "qualifierValue": "true", "featureValue": "true" },
+            { "environment": "PREPROD", "qualifier": "EMPLOYEE", "qualifierValue": "true", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "EMPLOYEE", "qualifierValue": "true", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "ACCOUNT_TYPE", "qualifierValue": "PREMIER", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "ACCOUNT_TYPE", "qualifierValue": "RETAIL", "featureValue": "true", "enabled": false, "description": "Waiting for the categorisation model accuracy report" }
+          ]
+        },
+        {
+          "code": "CRYPTO_WALLET", "name": "Crypto wallet", "description": "Buy, hold and sell crypto assets.",
+          "rules": [
+            { "environment": "DEV", "qualifier": "EMPLOYEE", "qualifierValue": "true", "featureValue": "true" },
+            { "environment": "SIT", "qualifier": "EMPLOYEE", "qualifierValue": "true", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "REGION", "qualifierValue": "EU", "featureValue": "true", "enabled": false, "description": "On hold until the MiCA licence is granted" }
+          ]
+        },
+        {
+          "code": "DAILY_TRANSFER_LIMIT", "name": "Daily transfer limit", "description": "Maximum outgoing transfer total per day, in the account currency.",
+          "rules": [
+            { "environment": "PROD", "qualifier": "KYC_LEVEL", "qualifierValue": "1", "featureValue": "1000" },
+            { "environment": "PROD", "qualifier": "KYC_LEVEL", "qualifierValue": "2", "featureValue": "10000" },
+            { "environment": "PROD", "qualifier": "KYC_LEVEL", "qualifierValue": "3", "featureValue": "50000" },
+            { "environment": "PROD", "qualifier": "ACCOUNT_TYPE", "qualifierValue": "BUSINESS", "featureValue": "250000" },
+            { "environment": "PROD", "qualifier": "ACCOUNT_TYPE", "qualifierValue": "STUDENT", "featureValue": "2500" },
+            { "environment": "UAT", "qualifier": "KYC_LEVEL", "qualifierValue": "1", "featureValue": "50", "description": "Tiny limit to test the limit dialog" }
+          ]
+        },
+        {
+          "code": "PUSH_NOTIFICATION_PROVIDER", "name": "Push notification provider", "description": "Which provider delivers push notifications.",
+          "rules": [
+            { "environment": "PROD", "qualifier": "APP_PLATFORM", "qualifierValue": "IOS", "featureValue": "apns" },
+            { "environment": "PROD", "qualifier": "APP_PLATFORM", "qualifierValue": "ANDROID", "featureValue": "fcm" },
+            { "environment": "PROD", "qualifier": "EMPLOYEE", "qualifierValue": "true", "featureValue": "in-house", "description": "Dogfooding the in-house gateway" },
+            { "environment": "SIT", "qualifier": "APP_PLATFORM", "qualifierValue": "ANDROID", "featureValue": "in-house" }
+          ]
+        },
+        {
+          "code": "SAVINGS_GOALS", "name": "Savings goals", "description": "Create goals and round up card payments into them.",
+          "rules": [
+            { "environment": "PROD", "qualifier": "ACCOUNT_TYPE", "qualifierValue": "RETAIL", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "ACCOUNT_TYPE", "qualifierValue": "STUDENT", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "CUSTOMER_ID", "qualifierValue": "C-0048213", "featureValue": "false", "description": "Customer asked for the feature to be hidden" }
+          ]
+        },
+        {
+          "code": "VIRTUAL_CARDS", "name": "Virtual cards", "description": "Single-use and subscription virtual card numbers.",
+          "rules": [
+            { "environment": "UAT", "qualifier": "ACCOUNT_TYPE", "qualifierValue": "PREMIER", "featureValue": "true" },
+            { "environment": "PREPROD", "qualifier": "ACCOUNT_TYPE", "qualifierValue": "PREMIER", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "ACCOUNT_TYPE", "qualifierValue": "PREMIER", "featureValue": "true", "effectiveFrom": "now+3d", "description": "Launch on Monday" }
+          ]
+        },
+        {
+          "code": "SUPPORT_CHAT_HOURS", "name": "Support chat hours", "description": "Opening hours of the in-app chat, as JSON.",
+          "rules": [
+            { "environment": "PROD", "qualifier": "ACCOUNT_TYPE", "qualifierValue": "PREMIER", "featureValue": "{\"weekdays\":\"00:00-24:00\",\"weekend\":\"00:00-24:00\"}", "description": "Premier: 24/7" },
+            { "environment": "PROD", "qualifier": "REGION", "qualifierValue": "TR", "featureValue": "{\"weekdays\":\"08:00-22:00\",\"weekend\":\"10:00-18:00\"}" },
+            { "environment": "PROD", "qualifier": "REGION", "qualifierValue": "EU", "featureValue": "{\"weekdays\":\"08:00-20:00\",\"weekend\":\"closed\"}" }
+          ]
+        },
+        {
+          "code": "NEW_ONBOARDING_FLOW", "name": "New onboarding flow", "description": "Video identification and instant account opening.",
+          "rules": [
+            { "environment": "DEV", "qualifier": "APP_PLATFORM", "qualifierValue": "IOS", "featureValue": "true" },
+            { "environment": "SIT", "qualifier": "APP_PLATFORM", "qualifierValue": "IOS", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "APP_VERSION", "qualifierValue": "5.12.0", "featureValue": "true", "description": "First version that ships the flow" },
+            { "environment": "PROD", "qualifier": "APP_VERSION", "qualifierValue": "5.11.2", "featureValue": "true", "effectiveFrom": "now-30d", "effectiveTo": "now-10d", "description": "Early pilot, ended" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Payments Gateway",
+      "description": "Card acquiring API used by merchants: authorisation, 3-D Secure, refunds, payouts and webhooks.",
+      "environments": [
+        { "code": "DEV", "name": "Development", "description": "Internal developer environment." },
+        { "code": "SANDBOX", "name": "Merchant sandbox", "description": "Public sandbox merchants integrate against." },
+        { "code": "STAGING", "name": "Staging", "description": "Certification with card schemes and acquirers." },
+        { "code": "PROD", "name": "Production", "description": "Live payment traffic." }
+      ],
+      "qualifiers": [
+        { "code": "MERCHANT_ID", "name": "Merchant ID", "valueType": "TEXT", "priority": 100, "description": "Merchant account, e.g. M-100245." },
+        { "code": "MERCHANT_CATEGORY", "name": "Merchant category code", "valueType": "NUMERIC", "priority": 70, "description": "ISO 18245 MCC, e.g. 5411 (grocery), 5812 (restaurants), 4511 (airlines)." },
+        { "code": "CURRENCY", "name": "Currency", "valueType": "TEXT", "priority": 60, "description": "ISO 4217 code of the transaction: TRY, EUR, USD, GBP." },
+        { "code": "CARD_SCHEME", "name": "Card scheme", "valueType": "TEXT", "priority": 50, "description": "VISA, MASTERCARD, AMEX or TROY." },
+        { "code": "RISK_SEGMENT", "name": "Risk segment", "valueType": "TEXT", "priority": 40, "description": "Merchant risk rating: LOW, MEDIUM or HIGH." },
+        { "code": "INTEGRATION_TYPE", "name": "Integration type", "valueType": "TEXT", "priority": 20, "description": "HOSTED_PAGE, API or SDK." },
+        { "code": "CHANNEL_CONTEXT", "name": "Channel context", "valueType": "JSON", "priority": 10, "description": "JSON describing the channel, e.g. {\"channel\":\"pos\",\"terminal\":\"smart\"}." }
+      ],
+      "features": [
+        {
+          "code": "THREE_DS_V2", "name": "3-D Secure 2", "description": "Use EMV 3DS 2.2 instead of 3DS 1 for card authentication.",
+          "rules": [
+            { "environment": "SANDBOX", "qualifier": "CARD_SCHEME", "qualifierValue": "VISA", "featureValue": "true" },
+            { "environment": "SANDBOX", "qualifier": "CARD_SCHEME", "qualifierValue": "MASTERCARD", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "CARD_SCHEME", "qualifierValue": "VISA", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "CARD_SCHEME", "qualifierValue": "MASTERCARD", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "CARD_SCHEME", "qualifierValue": "TROY", "featureValue": "true", "effectiveFrom": "now+45d", "description": "After TROY certification" },
+            { "environment": "PROD", "qualifier": "MERCHANT_ID", "qualifierValue": "M-100388", "featureValue": "false", "description": "Legacy plug-in, 3DS 1 only until their upgrade" }
+          ]
+        },
+        {
+          "code": "FRAUD_SCORING_MODEL", "name": "Fraud scoring model", "description": "Model used to score each authorisation.",
+          "rules": [
+            { "environment": "DEV", "qualifier": "RISK_SEGMENT", "qualifierValue": "HIGH", "featureValue": "ml-v2" },
+            { "environment": "STAGING", "qualifier": "RISK_SEGMENT", "qualifierValue": "HIGH", "featureValue": "ml-v2" },
+            { "environment": "PROD", "qualifier": "RISK_SEGMENT", "qualifierValue": "LOW", "featureValue": "rules-v3" },
+            { "environment": "PROD", "qualifier": "RISK_SEGMENT", "qualifierValue": "MEDIUM", "featureValue": "ml-v1" },
+            { "environment": "PROD", "qualifier": "RISK_SEGMENT", "qualifierValue": "HIGH", "featureValue": "ml-v2", "effectiveFrom": "now-3d", "description": "Shadow mode ended, ml-v2 decides" },
+            { "environment": "PROD", "qualifier": "MERCHANT_CATEGORY", "qualifierValue": "4511", "featureValue": "ml-v2", "description": "Airlines: high ticket, card-not-present" }
+          ]
+        },
+        {
+          "code": "SMART_ROUTING", "name": "Smart acquirer routing", "description": "Route each authorisation to the acquirer with the best approval rate.",
+          "rules": [
+            { "environment": "STAGING", "qualifier": "CURRENCY", "qualifierValue": "EUR", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "CURRENCY", "qualifierValue": "EUR", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "CURRENCY", "qualifierValue": "TRY", "featureValue": "true", "enabled": false, "description": "Disabled after the acquirer outage, see INC-2291" }
+          ]
+        },
+        {
+          "code": "PAYOUT_SCHEDULE", "name": "Payout schedule", "description": "How often settled funds are paid out to the merchant.",
+          "rules": [
+            { "environment": "PROD", "qualifier": "RISK_SEGMENT", "qualifierValue": "LOW", "featureValue": "daily" },
+            { "environment": "PROD", "qualifier": "RISK_SEGMENT", "qualifierValue": "MEDIUM", "featureValue": "weekly" },
+            { "environment": "PROD", "qualifier": "RISK_SEGMENT", "qualifierValue": "HIGH", "featureValue": "monthly" },
+            { "environment": "PROD", "qualifier": "MERCHANT_ID", "qualifierValue": "M-100245", "featureValue": "daily", "description": "Negotiated in contract" }
+          ]
+        },
+        {
+          "code": "MAX_TRANSACTION_AMOUNT", "name": "Maximum transaction amount", "description": "Largest single authorisation accepted, in the transaction currency.",
+          "rules": [
+            { "environment": "SANDBOX", "qualifier": "CURRENCY", "qualifierValue": "EUR", "featureValue": "1000" },
+            { "environment": "PROD", "qualifier": "CURRENCY", "qualifierValue": "TRY", "featureValue": "500000" },
+            { "environment": "PROD", "qualifier": "CURRENCY", "qualifierValue": "EUR", "featureValue": "15000" },
+            { "environment": "PROD", "qualifier": "CURRENCY", "qualifierValue": "USD", "featureValue": "15000" },
+            { "environment": "PROD", "qualifier": "CURRENCY", "qualifierValue": "GBP", "featureValue": "12000" },
+            { "environment": "PROD", "qualifier": "MERCHANT_CATEGORY", "qualifierValue": "4511", "featureValue": "40000", "description": "Airlines sell group tickets" }
+          ]
+        },
+        {
+          "code": "REFUND_API_V2", "name": "Refund API v2", "description": "Partial and multi-currency refunds through /v2/refunds.",
+          "rules": [
+            { "environment": "DEV", "qualifier": "INTEGRATION_TYPE", "qualifierValue": "API", "featureValue": "true" },
+            { "environment": "SANDBOX", "qualifier": "INTEGRATION_TYPE", "qualifierValue": "API", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "MERCHANT_ID", "qualifierValue": "M-100245", "featureValue": "true", "description": "Launch partner" },
+            { "environment": "PROD", "qualifier": "MERCHANT_ID", "qualifierValue": "M-100512", "featureValue": "true", "description": "Launch partner" },
+            { "environment": "PROD", "qualifier": "INTEGRATION_TYPE", "qualifierValue": "API", "featureValue": "true", "effectiveFrom": "now+14d", "description": "General availability" }
+          ]
+        },
+        {
+          "code": "WEBHOOK_RETRY_POLICY", "name": "Webhook retry policy", "description": "How failed webhook deliveries are retried, as JSON.",
+          "rules": [
+            { "environment": "PROD", "qualifier": "RISK_SEGMENT", "qualifierValue": "LOW", "featureValue": "{\"maxAttempts\":8,\"backoffSeconds\":[10,60,300,900,3600]}" },
+            { "environment": "PROD", "qualifier": "RISK_SEGMENT", "qualifierValue": "MEDIUM", "featureValue": "{\"maxAttempts\":5,\"backoffSeconds\":[10,60,300]}" },
+            { "environment": "SANDBOX", "qualifier": "INTEGRATION_TYPE", "qualifierValue": "API", "featureValue": "{\"maxAttempts\":3,\"backoffSeconds\":[5,30]}", "description": "Fast feedback for integrators" }
+          ]
+        },
+        {
+          "code": "CARD_TOKENIZATION", "name": "Card tokenisation", "description": "Store cards as network tokens for recurring payments.",
+          "rules": [
+            { "environment": "PROD", "qualifier": "CARD_SCHEME", "qualifierValue": "VISA", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "CARD_SCHEME", "qualifierValue": "MASTERCARD", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "CARD_SCHEME", "qualifierValue": "AMEX", "featureValue": "false", "description": "Not supported by our AMEX acquirer" }
+          ]
+        },
+        {
+          "code": "DYNAMIC_CURRENCY_CONVERSION", "name": "Dynamic currency conversion", "description": "Offer foreign cardholders to pay in their home currency.",
+          "rules": [
+            { "environment": "PROD", "qualifier": "CURRENCY", "qualifierValue": "TRY", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "CHANNEL_CONTEXT", "qualifierValue": "{\"channel\":\"pos\",\"terminal\":\"smart\"}", "featureValue": "true", "description": "Smart POS terminals in hotels and shops" },
+            { "environment": "PROD", "qualifier": "MERCHANT_CATEGORY", "qualifierValue": "5411", "featureValue": "false", "description": "Not allowed for grocery under the scheme rules" }
+          ]
+        },
+        {
+          "code": "SETTLEMENT_REPORT_V2", "name": "Settlement report v2", "description": "New CSV settlement report with fee breakdown.",
+          "rules": [
+            { "environment": "SANDBOX", "qualifier": "INTEGRATION_TYPE", "qualifierValue": "API", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "RISK_SEGMENT", "qualifierValue": "LOW", "featureValue": "true", "effectiveFrom": "now-1d", "effectiveTo": "now+29d", "description": "One-month opt-in pilot" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Customer Support Portal",
+      "description": "Internal ticketing and knowledge-base tool used by the support teams.",
+      "environments": [
+        { "code": "DEV", "name": "Development", "description": "Developer environment with anonymised tickets." },
+        { "code": "TEST", "name": "Test", "description": "Used by support team leads to try changes." },
+        { "code": "PROD", "name": "Production", "description": "Used by all agents." }
+      ],
+      "qualifiers": [
+        { "code": "AGENT_ID", "name": "Agent ID", "valueType": "TEXT", "priority": 100, "description": "Support agent login, e.g. agent.selin." },
+        { "code": "TEAM", "name": "Team", "valueType": "TEXT", "priority": 80, "description": "BILLING, TECHNICAL, ONBOARDING or VIP." },
+        { "code": "SENIOR_AGENT", "name": "Senior agent", "valueType": "BOOLEAN", "priority": 60, "description": "true for team leads and senior agents." },
+        { "code": "LANGUAGE", "name": "Ticket language", "valueType": "TEXT", "priority": 50, "description": "EN, TR, DE or FR." },
+        { "code": "SHIFT", "name": "Shift", "valueType": "TEXT", "priority": 30, "description": "DAY or NIGHT." }
+      ],
+      "features": [
+        {
+          "code": "AI_REPLY_SUGGESTIONS", "name": "AI reply suggestions", "description": "Draft replies suggested from similar solved tickets.",
+          "rules": [
+            { "environment": "DEV", "qualifier": "TEAM", "qualifierValue": "TECHNICAL", "featureValue": "true" },
+            { "environment": "TEST", "qualifier": "SENIOR_AGENT", "qualifierValue": "true", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "LANGUAGE", "qualifierValue": "EN", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "LANGUAGE", "qualifierValue": "TR", "featureValue": "true", "effectiveFrom": "now-10d" },
+            { "environment": "PROD", "qualifier": "LANGUAGE", "qualifierValue": "DE", "featureValue": "true", "effectiveFrom": "now+20d", "description": "German model in evaluation" },
+            { "environment": "PROD", "qualifier": "TEAM", "qualifierValue": "VIP", "featureValue": "false", "description": "VIP replies are always written by hand" }
+          ]
+        },
+        {
+          "code": "TICKET_AUTO_ASSIGNMENT", "name": "Automatic ticket assignment", "description": "Assign new tickets by skill and workload instead of round robin.",
+          "rules": [
+            { "environment": "PROD", "qualifier": "TEAM", "qualifierValue": "BILLING", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "TEAM", "qualifierValue": "TECHNICAL", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "SHIFT", "qualifierValue": "NIGHT", "featureValue": "true", "enabled": false, "description": "Night shift too small, disabled" }
+          ]
+        },
+        {
+          "code": "SLA_HOURS", "name": "First response SLA (hours)", "description": "Hours until a ticket breaches its first-response SLA.",
+          "rules": [
+            { "environment": "PROD", "qualifier": "TEAM", "qualifierValue": "VIP", "featureValue": "1" },
+            { "environment": "PROD", "qualifier": "TEAM", "qualifierValue": "BILLING", "featureValue": "8" },
+            { "environment": "PROD", "qualifier": "TEAM", "qualifierValue": "TECHNICAL", "featureValue": "12" },
+            { "environment": "PROD", "qualifier": "TEAM", "qualifierValue": "ONBOARDING", "featureValue": "24" }
+          ]
+        },
+        {
+          "code": "CSAT_SURVEY", "name": "Satisfaction survey", "description": "Send a one-question survey when a ticket is solved.",
+          "rules": [
+            { "environment": "PROD", "qualifier": "LANGUAGE", "qualifierValue": "EN", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "LANGUAGE", "qualifierValue": "TR", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "LANGUAGE", "qualifierValue": "FR", "featureValue": "true", "effectiveFrom": "now-90d", "effectiveTo": "now-30d", "description": "Quarterly survey, closed" }
+          ]
+        },
+        {
+          "code": "KNOWLEDGE_BASE_SEARCH", "name": "Knowledge base search", "description": "Search mode for the article sidebar: keyword or semantic.",
+          "rules": [
+            { "environment": "TEST", "qualifier": "TEAM", "qualifierValue": "TECHNICAL", "featureValue": "semantic" },
+            { "environment": "PROD", "qualifier": "AGENT_ID", "qualifierValue": "agent.selin", "featureValue": "semantic", "description": "Pilot user" },
+            { "environment": "PROD", "qualifier": "AGENT_ID", "qualifierValue": "agent.mert", "featureValue": "semantic", "description": "Pilot user" },
+            { "environment": "PROD", "qualifier": "TEAM", "qualifierValue": "BILLING", "featureValue": "keyword" }
+          ]
+        },
+        {
+          "code": "ESCALATION_MATRIX", "name": "Escalation matrix", "description": "Who gets paged when a ticket is escalated, as JSON.",
+          "rules": [
+            { "environment": "PROD", "qualifier": "TEAM", "qualifierValue": "TECHNICAL", "featureValue": "{\"level1\":\"team-lead-technical\",\"level2\":\"on-call-engineer\",\"level3\":\"head-of-engineering\"}" },
+            { "environment": "PROD", "qualifier": "TEAM", "qualifierValue": "BILLING", "featureValue": "{\"level1\":\"team-lead-billing\",\"level2\":\"finance-ops\"}" },
+            { "environment": "PROD", "qualifier": "SHIFT", "qualifierValue": "NIGHT", "featureValue": "{\"level1\":\"night-supervisor\",\"level2\":\"on-call-engineer\"}" }
+          ]
+        },
+        {
+          "code": "CALL_RECORDING", "name": "Call recording", "description": "Record phone calls for quality and training.",
+          "rules": [
+            { "environment": "PROD", "qualifier": "LANGUAGE", "qualifierValue": "DE", "featureValue": "false", "description": "Needs explicit consent flow first" },
+            { "environment": "PROD", "qualifier": "TEAM", "qualifierValue": "ONBOARDING", "featureValue": "true" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Data Platform",
+      "description": "Internal analytics pipelines. Set up recently: environments and qualifiers exist, most features have no rules yet.",
+      "environments": [
+        { "code": "DEV", "name": "Development", "description": "Sandbox warehouse." },
+        { "code": "PROD", "name": "Production", "description": "Production warehouse." }
+      ],
+      "qualifiers": [
+        { "code": "PIPELINE", "name": "Pipeline", "valueType": "TEXT", "priority": 50, "description": "Pipeline name, e.g. orders-daily." },
+        { "code": "BACKFILL", "name": "Backfill run", "valueType": "BOOLEAN", "priority": 40, "description": "true when the run is a historical backfill." }
+      ],
+      "features": [
+        {
+          "code": "INCREMENTAL_LOADS", "name": "Incremental loads", "description": "Load only changed rows instead of full snapshots.",
+          "rules": [
+            { "environment": "DEV", "qualifier": "PIPELINE", "qualifierValue": "orders-daily", "featureValue": "true" },
+            { "environment": "PROD", "qualifier": "BACKFILL", "qualifierValue": "true", "featureValue": "false", "description": "Backfills always reload everything" }
+          ]
+        },
+        { "code": "COLUMN_LINEAGE", "name": "Column-level lineage", "description": "Collect lineage for every column.", "rules": [] },
+        { "code": "COST_ALERTS", "name": "Warehouse cost alerts", "description": "Alert when a query costs more than the budget.", "rules": [] }
+      ]
+    }
+  ],
+  "users": [
+    { "username": "selin.aydin", "email": "selin.aydin@example.com" },
+    { "username": "mert.kaya", "email": "mert.kaya@example.com" },
+    { "username": "deniz.yilmaz", "email": "deniz.yilmaz@example.com" },
+    { "username": "lena.schmidt", "email": "lena.schmidt@example.com" },
+    { "username": "jonas.weber", "email": "jonas.weber@example.com" },
+    { "username": "sanne.devries", "email": "sanne.devries@example.com" },
+    { "username": "emre.demir", "email": "emre.demir@example.com" },
+    { "username": "claire.martin", "email": "claire.martin@example.com" }
+  ],
+  "products": [
+    { "name": "Starter plan (monthly)", "price": 0.0 },
+    { "name": "Team plan (monthly)", "price": 49.0 },
+    { "name": "Team plan (yearly)", "price": 490.0 },
+    { "name": "Business plan (monthly)", "price": 199.0 },
+    { "name": "Business plan (yearly)", "price": 1990.0 },
+    { "name": "Enterprise plan (yearly)", "price": 12000.0 },
+    { "name": "Extra environment add-on", "price": 15.0 },
+    { "name": "Audit log retention, 1 year", "price": 99.0 }
+  ]
+}

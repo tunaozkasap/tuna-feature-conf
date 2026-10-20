@@ -10,6 +10,13 @@ that resolves a feature's value for a request context.
   (`com.tuna.feature.conf.service.*`)
 - Default database is in-memory H2 (`service/src/main/resources/application.yml`); the app listens on port 8080
 - Request bodies are wrapped in `{"data": ...}`
+- **Demo data:** at every startup `seed/DemoDataSeeder` fills the empty database from
+  `service/src/main/resources/seed/demo-data.json` (5 projects with environments, qualifiers, features and rules,
+  plus users and products). Edit that file to change the data; rule times are relative to the startup (`now+7d`),
+  so scheduled and expired rules stay that way. Unknown fields, unknown codes or values that don't fit the
+  qualifier's type stop the startup with a message naming the entry. It is skipped when the database already has
+  projects, and turned off with `app.seed.enabled=false`. It also runs in the test context, so tests must never
+  assume empty tables.
 
 ## Frontend (decided, not built yet)
 
@@ -144,7 +151,8 @@ request's evidence before guessing from the code.
 ### What gets written
 
 - Every HTTP request writes **exactly one JSON line** when it finishes (`evidence/RequestEvidenceFilter`). Startup
-  writes one configuration line (`evidence/StartupEvidence`).
+  writes one configuration line (`evidence/StartupEvidence`), and one demo data line before it
+  (`"execution":"seedData"`, with `result` seeded / skipped / failed and the inserted counts per project).
 - Each request has a request id, returned in the `X-Request-Id` response header and in the `requestId` field of error
   responses. A caller can send its own `X-Request-Id` (`[A-Za-z0-9._-]{1,64}`); anything else is replaced by a UUID.
 

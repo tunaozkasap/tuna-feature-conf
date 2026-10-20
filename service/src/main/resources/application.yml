@@ -39,6 +39,10 @@ springdoc:
     display-request-duration: true
 
 app:
+  seed:
+    # Prototype phase: fill the empty in-memory database with seed/demo-data.json at every startup (DemoDataSeeder).
+    # Skipped when the database already has projects.
+    enabled: true
   errors:
     # Error responses always carry status, module, message (customer message), requestId and timestamp.
     # When true they also carry technicalMessage and context. context follows this same flag on purpose: it holds the
