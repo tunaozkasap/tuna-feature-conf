@@ -45,8 +45,15 @@ Nothing is kept on disk, so:
 ### How to read it
 
 1. Get the request id from the `X-Request-Id` header or the error body's `requestId`.
-2. Find the line containing that id with `grep '"requestId":"<id>"'` (`jq` isn't installed). To find failures,
-   search for `"severity":"ERROR"` or `"severity":"WARN"`.
+2. Find the request's line with `jq` (1.8.2, on the user PATH; in a shell started before it was installed, use
+   `/c/Users/tunao/AppData/Local/Microsoft/WinGet/Packages/jqlang.jq_Microsoft.Winget.Source_8wekyb3d8bbwe/jq.exe`).
+   The output mixes plain Spring log lines with evidence lines, so keep only the JSON lines first:
+
+   ```bash
+   grep '^{' app.log | jq 'select(.evidence.requestId=="<id>") | .evidence'
+   grep '^{' app.log | jq -c 'select(.evidence.severity=="WARN" or .evidence.severity=="ERROR") | .evidence | {requestId, status, path, error: .error.technicalMessage}'
+   ```
+
 3. Each line is `{"timestamp", "thread", "logger", "evidence": {...}}`; every field below is inside `evidence`.
    Check them in this order:
    - `status`, `severity` (INFO < 400, WARN 4xx, ERROR 5xx), `durationMs`, `unhandledException`
@@ -87,5 +94,5 @@ there too). A shell started before it was added won't find `mvn`; call
 tests trigger integrity violations on purpose. Judge the build by the test summary and `BUILD SUCCESS`.
 
 To check a change end to end, start the app in the background with its output in a scratchpad file, send a request
-with your own `X-Request-Id`, then search the file for that id (see the evidence section above). Stop the app when you
+with your own `X-Request-Id`, then look up that id with `jq` (see the evidence section above). Stop the app when you
 are done, so port 8080 is free.
