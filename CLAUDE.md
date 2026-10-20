@@ -44,22 +44,39 @@ Build integration:
 **No end-to-end tests for now: don't write, add or set up any.** That means no Playwright, Cypress, Selenium or other
 browser automation against a running app, and no e2e config, dependencies, browser downloads or Maven profile.
 
-Every other kind of test is welcome and expected with UI changes:
+**No mocked API, ever.** No MSW, no mocked `fetch`, no `vi.mock` of the API client or query hooks, no fake response
+fixtures. Frontend tests talk to the real backend.
 
-- **Unit tests:** Vitest for hooks, utilities, API helpers, mapping and validation logic.
-- **Component tests:** React Testing Library with Vitest, for forms, validation messages, tables, loading and empty
-  states, and error notifications that show the `requestId`. Find elements by role, label and visible text; use
-  `data-testid` only where nothing else identifies an element.
-- **Mocked API tests:** MSW (Mock Service Worker) mocks the API at the network level for component and screen tests.
-  Build mock responses from the generated OpenAPI types, and copy error bodies from what the service really returns
-  (pinned on the backend by `ErrorResponseIntegrationTest`), so mocks don't drift from the backend.
+**The real backend is always started before the frontend tests run:**
+
+- Vitest's `globalSetup` starts the built service jar (`java -jar service/target/service-*.jar`) on a dedicated port
+  (18080, so it doesn't clash with a dev instance on 8080), with a fresh in-memory H2. It writes the backend's output
+  to `ui/target/test-backend.log` and waits until `/api-docs` answers.
+- If the backend doesn't come up, the test run fails. Never skip the tests or fall back to mocks.
+- The teardown stops the backend after the run.
+- The API client gets its base URL from configuration, `http://localhost:18080` in tests.
+
+Within that setup, every kind of test except e2e is welcome and expected with UI changes:
+
+- **Unit tests:** Vitest for hooks, utilities, API helpers, mapping and validation logic. Whatever touches the API
+  calls the running backend.
+- **Component tests:** React Testing Library with Vitest (jsdom), rendering screens that load and save through the
+  real API: forms, server-side validation messages, tables, loading and empty states, and error notifications that
+  show the real `requestId`. Find elements by role, label and visible text; use `data-testid` only where nothing else
+  identifies an element.
+- **Test data:** each test creates what it needs through the API, with unique names (as
+  `EvidenceLoggingIntegrationTest` does with UUIDs), so tests don't depend on each other on the shared database.
+- **Evidence on failure:** each test sends its own `X-Request-Id` (e.g. `ui-<test name>`, matching
+  `[A-Za-z0-9._-]{1,64}`). When a test fails, print that test's evidence lines from `ui/target/test-backend.log`
+  (with `jq`), so the failure shows what the backend decided.
 - **Type check:** `tsc` runs in the build, so a contract change in the generated types fails the build.
-- **Serving the UI from the jar:** covered by a MockMvc test in `service`, not a browser. It checks that `GET /`
-  returns `index.html`, that client-side routes forward to it, and that `/api/**`, `/api-docs`, `/swagger-ui.html` and
-  `/h2-console` don't.
+- **Serving the UI from the jar:** a `@SpringBootTest(webEnvironment = RANDOM_PORT)` test in `service` sends real HTTP
+  requests. It checks that `GET /` returns `index.html`, that client-side routes forward to it, and that `/api/**`,
+  `/api-docs`, `/swagger-ui.html` and `/h2-console` don't.
 
-These run in the normal `mvn clean install` through `frontend-maven-plugin` (`npm test`, non-interactive), next to
-the backend tests.
+Build order: the frontend tests need the packaged service jar, and `service` depends on `ui`. So the `ui` module only
+builds (no tests), and `service` runs `npm test` (non-interactive, `frontend-maven-plugin` working in `../ui`) in its
+`integration-test` phase, after the jar is packaged. `mvn clean install` runs them; `mvn -pl service test` doesn't.
 
 To check a UI change in a real browser, run the jar, go through the flow in the built-in browser, and look up the
 requests' evidence by their `X-Request-Id`. That's a manual check, not a test to commit.
