@@ -49,12 +49,14 @@ fixtures. Frontend tests talk to the real backend.
 
 **The real backend is always started before the frontend tests run:**
 
-- Vitest's `globalSetup` starts the built service jar (`java -jar service/target/service-*.jar`) on a dedicated port
-  (18080, so it doesn't clash with a dev instance on 8080), with a fresh in-memory H2. It writes the backend's output
-  to `ui/target/test-backend.log` and waits until `/api-docs` answers.
+- Vitest's `globalSetup` copies the built service jar (`service/target/service-*.jar`) to `ui/target/test-backend/`
+  and starts the copy with `java -jar`, on a free port it picks at startup (never a fixed port, so parallel runs
+  don't clash), with a fresh in-memory H2. Running a copy matters on Windows: a running jar is locked, and a backend
+  build running at the same time must still be able to replace `service/target`.
+- It writes the backend's output to `ui/target/test-backend.log` and waits until `/api-docs` answers.
 - If the backend doesn't come up, the test run fails. Never skip the tests or fall back to mocks.
 - The teardown stops the backend after the run.
-- The API client gets its base URL from configuration, `http://localhost:18080` in tests.
+- The API client gets its base URL from configuration; `globalSetup` hands the tests `http://localhost:<port>`.
 
 Within that setup, every kind of test except e2e is welcome and expected with UI changes:
 
@@ -74,9 +76,11 @@ Within that setup, every kind of test except e2e is welcome and expected with UI
   requests. It checks that `GET /` returns `index.html`, that client-side routes forward to it, and that `/api/**`,
   `/api-docs`, `/swagger-ui.html` and `/h2-console` don't.
 
-Build order: the frontend tests need the packaged service jar, and `service` depends on `ui`. So the `ui` module only
-builds (no tests), and `service` runs `npm test` (non-interactive, `frontend-maven-plugin` working in `../ui`) in its
-`integration-test` phase, after the jar is packaged. `mvn clean install` runs them; `mvn -pl service test` doesn't.
+Build order: the frontend tests need the packaged service jar, and `service` depends on `ui`. So the frontend tests
+are not bound to the default lifecycle: `mvn clean install` builds the UI and runs the backend tests only. The
+frontend tests have their own entry point, a `ui-tests` Maven profile on the `ui` module that runs `npm test`
+(non-interactive, through `frontend-maven-plugin`) against an already built service jar. Keeping them separate is what
+lets them run at the same time as the backend tests (see "Parallel test execution").
 
 To check a UI change in a real browser, run the jar, go through the flow in the built-in browser, and look up the
 requests' evidence by their `X-Request-Id`. That's a manual check, not a test to commit.
@@ -93,6 +97,49 @@ lines to the report on failure. Only add it when the user explicitly asks for it
 - Mask anything sensitive before it reaches the evidence, using `util/EvidenceMasking` (secrets, e-mails,
   connection-URL passwords, qualifier values).
 - Errors go through `ServiceException` and `GlobalExceptionHandler`, which produce the unified JSON error response.
+
+## Parallel test execution
+
+Running tests in parallel is a hard requirement. Every test must be safe to run concurrently with any other, and
+nothing in the build may force the backend and frontend suites to run one after the other.
+
+### Backend: threads in one JVM
+
+- JUnit 5 parallel execution, in threads (not forked JVMs), with classes and methods concurrent:
+  `junit.jupiter.execution.parallel.enabled=true`, `...mode.default=concurrent` and `...mode.classes.default=concurrent`
+  in `service/src/test/resources/junit-platform.properties`.
+- **No shared mutable global state in tests.** Don't set and reset a static per test. Example:
+  `EvidenceWriters.setWriter(...)` is a single JVM-wide slot; capture evidence with one writer installed once for the
+  whole JVM and never reset, and have each test pick its own lines by a unique `X-Request-Id`.
+- **Unique data per test** (UUID-based names and codes). Never assume an empty table or a global count; query only
+  the data the test created, e.g. by its own `projectId`.
+- **No fixed ports:** use `MockMvc` or `webEnvironment = RANDOM_PORT`.
+- Don't use `@DirtiesContext`; it rebuilds the shared Spring context under other running tests.
+- `@ResourceLock` / `@Isolated` only as a last resort, with a comment saying what the shared resource is.
+
+**Status (2026-10-20): not enabled yet.** With those settings, 43 of the 52 tests pass and the module runs in about
+8 s instead of 18 s. The other 9 fail every time, all in `EvidenceLoggingIntegrationTest` and
+`ErrorResponseWithoutTechnicalMessageIntegrationTest`, because both set and reset `EvidenceWriters`. Fix those two
+classes first, then enable it. Remove this note once it's on.
+
+To try it without changing files:
+`mvn -pl service test -Djunit.jupiter.execution.parallel.enabled=true -Djunit.jupiter.execution.parallel.mode.default=concurrent -Djunit.jupiter.execution.parallel.mode.classes.default=concurrent`
+
+### Frontend: threads in one Node process
+
+- Vitest with `pool: 'threads'`; test files run in parallel worker threads. `describe.concurrent` / `test.concurrent`
+  are welcome where the tests are independent.
+- All workers share the one backend that `globalSetup` started. Each test creates its own data with unique names and
+  sends its own `X-Request-Id`, so tests and their evidence lines never mix.
+
+### Backend and frontend suites at the same time
+
+- Build once: `mvn clean install -DskipTests`.
+- Then run both suites concurrently, as separate processes: the backend tests (`mvn -pl service test`) and the
+  frontend tests (`ui-tests` profile). They share nothing: the backend tests run in their own JVM with their own
+  in-memory H2, and the frontend tests start a copy of the jar on a free port with its own H2.
+- When the UI is built, add one script that does this build, starts both suites concurrently, waits for both and
+  fails if either fails. On CI, the same split: one build job, then two parallel test jobs.
 
 ## Debugging with execution evidence
 
@@ -156,7 +203,8 @@ Maven 3.9.6 is installed at `C:\BIZ\TOOLS\maven\apache-maven-3.9.6` and is on th
 there too). A shell started before it was added won't find `mvn`; call
 `/c/BIZ/TOOLS/maven/apache-maven-3.9.6/bin/mvn` directly in that case. JDK 21 (Eclipse Adoptium) is on PATH.
 
-- Build everything and run all tests: `mvn clean install`
+- Build everything and run the backend tests: `mvn clean install` (see "Parallel test execution" for running the
+  backend and frontend suites together)
 - Test only the service module: `mvn -pl service test`
 - Run one test class: `mvn -pl service test -Dtest=EvidenceLoggingIntegrationTest`
 - Run the app (after an `install`, so `model` and `persistence` are in the local repository):
