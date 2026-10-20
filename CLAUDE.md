@@ -11,6 +11,33 @@ that resolves a feature's value for a request context.
 - Default database is in-memory H2 (`service/src/main/resources/application.yml`); the app listens on port 8080
 - Request bodies are wrapped in `{"data": ...}`
 
+## Frontend (decided, not built yet)
+
+There is no UI yet. When it's built, it uses this stack and build setup; don't introduce another framework.
+
+- **Stack:** React + TypeScript, built with Vite.
+- **API types:** generated from the springdoc OpenAPI spec (`/api-docs`) with `openapi-typescript`, never written by
+  hand, so they stay in step with the DTOs, the `{"data": ...}` wrapper and the unified error body.
+- **Data fetching:** TanStack Query (caching, refetch after saves, loading and error states).
+- **Components:** Mantine (tables, forms, selects, notifications).
+- **Errors:** show the error body's `message` to the user, plus its `requestId`, so a failure reported from the UI
+  can be traced to its evidence line.
+- **Screens:** CRUD for projects, environments, features, qualifiers and rules, and an evaluation tester (feature +
+  environment + request context → resolved value).
+
+Build integration:
+
+- A `ui` Maven module (Vite project and `pom.xml`), listed before `service` in the root pom.
+- `frontend-maven-plugin` installs a pinned Node/npm inside the module and runs `npm ci` and `npm run build`, so
+  `mvn clean install` builds the UI with no Node installed globally.
+- The build output is packaged under `META-INF/resources/` in the `ui` jar. `service` depends on `ui`, and Spring
+  Boot serves it as static content, so the single service jar serves both `/api/**` and the UI on port 8080.
+- A forward controller in `service` sends client-side routes (anything that isn't `/api`, Swagger, `/api-docs` or
+  `/h2-console`, and isn't a static file) to `index.html`.
+- Local development: run the service, then `npm run dev` in `ui/`. Vite's dev server proxies `/api` to
+  `localhost:8080`.
+- A `skip.ui` Maven property (`-Dskip.ui=true`) skips the npm steps for backend-only builds.
+
 ## Ground rules
 
 - No Java streams; use plain loops.
