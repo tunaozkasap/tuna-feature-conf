@@ -45,11 +45,13 @@ Nothing is kept on disk, so:
 ### How to read it
 
 1. Get the request id from the `X-Request-Id` header or the error body's `requestId`.
-2. Find the line containing that id. Search for `"requestId":"<id>"`, or search for `"severity":"ERROR"` /
-   `"severity":"WARN"` to find failures.
-3. Check fields in this order:
+2. Find the line containing that id with `grep '"requestId":"<id>"'` (`jq` isn't installed). To find failures,
+   search for `"severity":"ERROR"` or `"severity":"WARN"`.
+3. Each line is `{"timestamp", "thread", "logger", "evidence": {...}}`; every field below is inside `evidence`.
+   Check them in this order:
    - `status`, `severity` (INFO < 400, WARN 4xx, ERROR 5xx), `durationMs`, `unhandledException`
-   - `handler` (e.g. `EvaluationController.evaluateFeature`), `method`, `path`, `query` (masked), `headers`
+   - `handler` (e.g. `EvaluationController.evaluateFeature`), `route`, `pathVariables`, `method`, `path`, `query`
+     (masked), `headers`
    - `error`: `exceptionType`, `thrownAt`, `httpStatus`, `module`, `technicalMessageKey`, `technicalMessage` and the
      masked `context` (field errors with their violated constraint, `constraint` and `sqlState` for integrity
      violations). For 500s there is also `message`, `causeChain`, `rootCauseMessage` and `stackTrace`.
@@ -69,5 +71,21 @@ not found, validation, integrity violation, search, masking). Keep it in step wh
 
 ## Build and test
 
-Maven isn't on PATH in this environment and there is no wrapper. Ask the user how they build and run the project
-before assuming a command.
+Maven 3.9.6 is installed at `C:\BIZ\TOOLS\maven\apache-maven-3.9.6` and is on the user PATH (`MAVEN_HOME` points
+there too). A shell started before it was added won't find `mvn`; call
+`/c/BIZ/TOOLS/maven/apache-maven-3.9.6/bin/mvn` directly in that case. JDK 21 (Eclipse Adoptium) is on PATH.
+
+- Build everything and run all tests: `mvn clean install`
+- Test only the service module: `mvn -pl service test`
+- Run one test class: `mvn -pl service test -Dtest=EvidenceLoggingIntegrationTest`
+- Run the app (after an `install`, so `model` and `persistence` are in the local repository):
+  `mvn -pl service spring-boot:run`, or `java -jar service/target/service-0.0.1-SNAPSHOT.jar`
+- Once started: API on `http://localhost:8080/api/...`, Swagger UI at `/swagger-ui.html`, OpenAPI spec at
+  `/api-docs`, H2 console at `/h2-console`
+
+`ERROR ... SqlExceptionHelper : Referential integrity constraint violation` lines during the tests are expected: some
+tests trigger integrity violations on purpose. Judge the build by the test summary and `BUILD SUCCESS`.
+
+To check a change end to end, start the app in the background with its output in a scratchpad file, send a request
+with your own `X-Request-Id`, then search the file for that id (see the evidence section above). Stop the app when you
+are done, so port 8080 is free.
