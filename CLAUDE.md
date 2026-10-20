@@ -105,25 +105,20 @@ nothing in the build may force the backend and frontend suites to run one after 
 
 ### Backend: threads in one JVM
 
-- JUnit 5 parallel execution, in threads (not forked JVMs), with classes and methods concurrent:
-  `junit.jupiter.execution.parallel.enabled=true`, `...mode.default=concurrent` and `...mode.classes.default=concurrent`
-  in `service/src/test/resources/junit-platform.properties`.
+- Parallel execution is on: JUnit 5 parallel execution, in threads (not forked JVMs), with classes and methods
+  concurrent: `junit.jupiter.execution.parallel.enabled=true`, `...mode.default=concurrent` and
+  `...mode.classes.default=concurrent` in `service/src/test/resources/junit-platform.properties`.
 - **No shared mutable global state in tests.** Don't set and reset a static per test. Example:
-  `EvidenceWriters.setWriter(...)` is a single JVM-wide slot; capture evidence with one writer installed once for the
-  whole JVM and never reset, and have each test pick its own lines by a unique `X-Request-Id`.
+  `EvidenceWriters.setWriter(...)` is a single JVM-wide slot, so tests never call it. `CapturedEvidence` is the one
+  evidence writer for the test JVM (registered in the test `META-INF/services`, so it is discovered once and never
+  reset); it keeps each evidence by `requestId` and still writes it to the console. A test sends
+  `CapturedEvidence.newRequestId()` as its `X-Request-Id` and reads its own evidence with
+  `CapturedEvidence.forRequest(id)`.
 - **Unique data per test** (UUID-based names and codes). Never assume an empty table or a global count; query only
   the data the test created, e.g. by its own `projectId`.
 - **No fixed ports:** use `MockMvc` or `webEnvironment = RANDOM_PORT`.
 - Don't use `@DirtiesContext`; it rebuilds the shared Spring context under other running tests.
 - `@ResourceLock` / `@Isolated` only as a last resort, with a comment saying what the shared resource is.
-
-**Status (2026-10-20): not enabled yet.** With those settings, 43 of the 52 tests pass and the module runs in about
-8 s instead of 18 s. The other 9 fail every time, all in `EvidenceLoggingIntegrationTest` and
-`ErrorResponseWithoutTechnicalMessageIntegrationTest`, because both set and reset `EvidenceWriters`. Fix those two
-classes first, then enable it. Remove this note once it's on.
-
-To try it without changing files:
-`mvn -pl service test -Djunit.jupiter.execution.parallel.enabled=true -Djunit.jupiter.execution.parallel.mode.default=concurrent -Djunit.jupiter.execution.parallel.mode.classes.default=concurrent`
 
 ### Frontend: threads in one Node process
 
