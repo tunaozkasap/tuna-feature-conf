@@ -36,7 +36,37 @@ Build integration:
   `/h2-console`, and isn't a static file) to `index.html`.
 - Local development: run the service, then `npm run dev` in `ui/`. Vite's dev server proxies `/api` to
   `localhost:8080`.
-- A `skip.ui` Maven property (`-Dskip.ui=true`) skips the npm steps for backend-only builds.
+- A `skip.ui` Maven property (`-Dskip.ui=true`) skips the npm steps (including the frontend tests) for backend-only
+  builds.
+
+### Frontend testing
+
+**No end-to-end tests for now: don't write, add or set up any.** That means no Playwright, Cypress, Selenium or other
+browser automation against a running app, and no e2e config, dependencies, browser downloads or Maven profile.
+
+Every other kind of test is welcome and expected with UI changes:
+
+- **Unit tests:** Vitest for hooks, utilities, API helpers, mapping and validation logic.
+- **Component tests:** React Testing Library with Vitest, for forms, validation messages, tables, loading and empty
+  states, and error notifications that show the `requestId`. Find elements by role, label and visible text; use
+  `data-testid` only where nothing else identifies an element.
+- **Mocked API tests:** MSW (Mock Service Worker) mocks the API at the network level for component and screen tests.
+  Build mock responses from the generated OpenAPI types, and copy error bodies from what the service really returns
+  (pinned on the backend by `ErrorResponseIntegrationTest`), so mocks don't drift from the backend.
+- **Type check:** `tsc` runs in the build, so a contract change in the generated types fails the build.
+- **Serving the UI from the jar:** covered by a MockMvc test in `service`, not a browser. It checks that `GET /`
+  returns `index.html`, that client-side routes forward to it, and that `/api/**`, `/api-docs`, `/swagger-ui.html` and
+  `/h2-console` don't.
+
+These run in the normal `mvn clean install` through `frontend-maven-plugin` (`npm test`, non-interactive), next to
+the backend tests.
+
+To check a UI change in a real browser, run the jar, go through the flow in the built-in browser, and look up the
+requests' evidence by their `X-Request-Id`. That's a manual check, not a test to commit.
+
+**Later:** e2e tests will use **Playwright** when they're added: a small smoke suite against the real service jar, in
+its own Maven profile outside the default build, sending a per-test `X-Request-Id` and attaching that test's evidence
+lines to the report on failure. Only add it when the user explicitly asks for it.
 
 ## Ground rules
 
