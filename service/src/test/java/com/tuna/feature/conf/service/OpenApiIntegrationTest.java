@@ -39,6 +39,20 @@ public class OpenApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("Each nested DTO has its own schema named after its outer class, and the error body is included")
+    void namesDtoSchemasAfterTheirOuterClass() throws Exception {
+        mockMvc.perform(get("/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.components.schemas.FeatureResponse.properties.code").exists())
+                .andExpect(jsonPath("$.components.schemas.FeatureRuleResponse.properties.qualifierValue").exists())
+                .andExpect(jsonPath("$.components.schemas.EvaluationRequest.properties.requestContext").exists())
+                .andExpect(jsonPath("$.components.schemas.CrudResponseFeatureResponse.properties.items").exists())
+                .andExpect(jsonPath("$.components.schemas.ApiErrorResponse.properties.requestId").exists())
+                .andExpect(jsonPath("$.components.schemas.Response").doesNotExist())
+                .andExpect(jsonPath("$.components.schemas.CreateRequest").doesNotExist());
+    }
+
+    @Test
     @DisplayName("Should access Swagger UI endpoint")
     void shouldAccessSwaggerUi() throws Exception {
         mockMvc.perform(get("/swagger-ui.html"))

@@ -18,19 +18,35 @@ that resolves a feature's value for a request context.
   projects, and turned off with `app.seed.enabled=false`. It also runs in the test context, so tests must never
   assume empty tables.
 
-## Frontend (decided, not built yet)
+## Frontend
 
-There is no UI yet. When it's built, it uses this stack and build setup; don't introduce another framework.
+The UI lives in `ui/`. **Read `ui/README.md` first**: it maps the stack to backend terms, lists every screen and
+walks through how one screen loads and saves. Use this stack and build setup; don't introduce another framework.
 
-- **Stack:** React + TypeScript, built with Vite.
-- **API types:** generated from the springdoc OpenAPI spec (`/api-docs`) with `openapi-typescript`, never written by
-  hand, so they stay in step with the DTOs, the `{"data": ...}` wrapper and the unified error body.
-- **Data fetching:** TanStack Query (caching, refetch after saves, loading and error states).
-- **Components:** Mantine (tables, forms, selects, notifications).
+- **Readable by a backend developer (hard requirement).** The user is not a frontend developer. Every file starts
+  with a comment saying what it is for; each screen is one page file you can read top to bottom; prefer plain,
+  slightly repetitive code over generic abstractions, render props, custom hook factories or clever TypeScript;
+  comment React-specific moves (keys, effects, invalidation) where they appear. Keep `ui/README.md` in step when the
+  layout or a pattern changes.
+- **Stack:** React + TypeScript, built with Vite; React Router for addresses.
+- **API types:** generated from the springdoc OpenAPI spec (`/api-docs`) with `openapi-typescript` into
+  `ui/src/api/schema.d.ts`, never written by hand, so they stay in step with the DTOs, the `{"data": ...}` wrapper
+  and the unified error body (`ApiErrorResponse`, added to the spec by `OpenApiConfig`). Schema names come from
+  `OpenApiConfig.DtoTypeNameResolver` (`FeatureDto.Response` → `FeatureResponse`). After a DTO change, run
+  `npm run generate-api` against a running service; `ui/src/api/types.ts` gives the screens friendly names.
+- **API calls:** only `ui/src/api/http.ts` does HTTP (request id per call, `ApiError`); one file per entity in
+  `ui/src/api/` holds the plain calls and the hooks.
+- **Data fetching:** TanStack Query (caching, refetch after saves, loading and error states). Everything of a
+  project is cached under `['project', projectId, ...]` (`api/queryKeys.ts`).
+- **Components:** Mantine (tables, forms, selects, notifications). Use `withAsterisk`, not `required`, on inputs:
+  `required` makes the browser block the submit before the form's own validation messages show.
 - **Errors:** show the error body's `message` to the user, plus its `requestId`, so a failure reported from the UI
-  can be traced to its evidence line.
-- **Screens:** CRUD for projects, environments, features, qualifiers and rules, and an evaluation tester (feature +
-  environment + request context → resolved value).
+  can be traced to its evidence line. `queryClient.ts` does this for every failed save.
+- **Logic mirrored from Java:** `ui/src/utils/rules.ts` repeats `FeatureRuleEntity.isEffective` (rule status) and
+  `EvaluationService.EVALUATION_ORDER`; change both sides together.
+- **Screens:** projects, project overview (counts, features × environments grid, starting and ending soon),
+  features, feature detail (rules per environment in evaluation order), rules (all, with filters), evaluation tester,
+  environments and qualifiers. The table of addresses is at the top of `ui/src/App.tsx`.
 
 Build integration:
 
@@ -39,10 +55,14 @@ Build integration:
   `mvn clean install` builds the UI with no Node installed globally.
 - The build output is packaged under `META-INF/resources/` in the `ui` jar. `service` depends on `ui`, and Spring
   Boot serves it as static content, so the single service jar serves both `/api/**` and the UI on port 8080.
-- A forward controller in `service` sends client-side routes (anything that isn't `/api`, Swagger, `/api-docs` or
-  `/h2-console`, and isn't a static file) to `index.html`.
+- `SpaForwardController` in `service` forwards the client-side routes, all under `/projects` and `/projects/**`, to
+  `index.html`; `/` is Spring Boot's welcome page. A new top-level UI address needs a mapping there too.
 - Local development: run the service, then `npm run dev` in `ui/`. Vite's dev server proxies `/api` to
-  `localhost:8080`.
+  `localhost:8080`, or to `API_URL` when set (e.g. `API_URL=http://localhost:18080`).
+- **Windows file locks:** a running `npm run dev` locks files in `ui/node_modules`, and a running
+  `java -jar service/target/service-*.jar` locks that jar. Stop them before `mvn clean install`, the frontend tests
+  or `scripts/test-all.sh` (`npm ci` and the jar repackaging fail halfway otherwise). To keep a service running
+  during builds, start it from a copy of the jar, as the frontend tests' `globalSetup` does.
 - A `skip.ui` Maven property (`-Dskip.ui=true`) skips the npm steps (including the frontend tests) for backend-only
   builds.
 
@@ -75,9 +95,14 @@ Within that setup, every kind of test except e2e is welcome and expected with UI
   identifies an element.
 - **Test data:** each test creates what it needs through the API, with unique names (as
   `EvidenceLoggingIntegrationTest` does with UUIDs), so tests don't depend on each other on the shared database.
-- **Evidence on failure:** each test sends its own `X-Request-Id` (e.g. `ui-<test name>`, matching
-  `[A-Za-z0-9._-]{1,64}`). When a test fails, print that test's evidence lines from `ui/target/test-backend.log`
-  (with `jq`), so the failure shows what the backend decided.
+  `ui/test/testData.ts` has the helpers (`createTestSetup()`, `createTestRule(...)`, ...); `ui/test/render.tsx` has
+  `renderPage(path)` (the real `App` at that address) and helpers for Mantine selects, table rows and notifications.
+  The demo data is seeded in the test backend too, so never assume counts or empty lists.
+- **Evidence on failure:** each test sends its own `X-Request-Id` (`ui-<test name>-<random>`, set per test by
+  `ui/test/setup.ts`). When a test fails, `setup.ts` prints that test's evidence lines from
+  `ui/target/test-backend.log` (parsed in Node), so the failure shows what the backend decided. `ui/test/evidence.ts`
+  (`waitForEvidence(id)`) lets a test assert on the backend's decision. The prefix is one slot per worker, so tests
+  that call the API inside `test.concurrent` must pass their own request ids.
 - **Type check:** `tsc` runs in the build, so a contract change in the generated types fails the build.
 - **Serving the UI from the jar:** a `@SpringBootTest(webEnvironment = RANDOM_PORT)` test in `service` sends real HTTP
   requests. It checks that `GET /` returns `index.html`, that client-side routes forward to it, and that `/api/**`,
@@ -140,8 +165,9 @@ nothing in the build may force the backend and frontend suites to run one after 
 - Then run both suites concurrently, as separate processes: the backend tests (`mvn -pl service test`) and the
   frontend tests (`ui-tests` profile). They share nothing: the backend tests run in their own JVM with their own
   in-memory H2, and the frontend tests start a copy of the jar on a free port with its own H2.
-- When the UI is built, add one script that does this build, starts both suites concurrently, waits for both and
-  fails if either fails. On CI, the same split: one build job, then two parallel test jobs.
+- `bash scripts/test-all.sh` does exactly that: the build, then both suites concurrently (logs in
+  `target/test-all/`), a summary, and a non-zero exit if either fails. On CI, the same split: one build job, then
+  two parallel test jobs.
 
 ## Debugging with execution evidence
 
