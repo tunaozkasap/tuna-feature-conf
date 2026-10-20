@@ -21,6 +21,7 @@
     <modules>
         <module>model</module>
         <module>persistence</module>
+        <module>ui</module>
         <module>service</module>
     </modules>
 </project>
