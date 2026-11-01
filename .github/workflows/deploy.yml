@@ -1,0 +1,75 @@
+# Every merge to main: build, run the backend and frontend tests, then deploy to the Scaleway server.
+# A failing test stops it before anything is deployed. "Run workflow" on the Actions tab starts it by hand.
+# The service is public at https://b635306c-bda8-49bb-842e-50044d5398a3.pub.instances.scw.cloud:8443. See deploy/README.md.
+#
+# Needs one repository secret, SCALEWAY_DEPLOY_KEY: the private key the server's deploy user accepts.
+
+name: Build, test and deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One deployment at a time; a newer merge waits for the running one instead of cancelling it halfway
+concurrency:
+  group: deploy-scaleway
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # Builds once, then runs both suites at the same time (CLAUDE.md, "Parallel test execution")
+      - name: Build and test
+        run: bash scripts/test-all.sh
+
+      - name: Keep the test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: |
+            target/test-all/
+            ui/target/test-backend.log
+          if-no-files-found: ignore
+
+      - name: Keep the service jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: service-jar
+          path: service/target/service-0.0.1-SNAPSHOT.jar
+          if-no-files-found: error
+
+  deploy:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: service-jar
+          path: build
+
+      - name: Deploy to the Scaleway server
+        env:
+          DEPLOY_KEY: ${{ secrets.SCALEWAY_DEPLOY_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          JAR=build/service-0.0.1-SNAPSHOT.jar SSH_KEY=~/.ssh/deploy_key bash scripts/deploy.sh

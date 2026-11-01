@@ -1,0 +1,31 @@
+# Settings for the Scaleway server, on top of application.yml. Switched on by deploy/server/feature-conf.service
+# (--spring.profiles.active=prod). See deploy/README.md.
+
+server:
+  # The service serves HTTPS itself, open to everyone. 443 belongs to OpenVPN on this server, hence 8443.
+  port: 8443
+  ssl:
+    bundle: web
+
+spring:
+  ssl:
+    bundle:
+      pem:
+        web:
+          # The Let's Encrypt certificate. certbot renews it; its deploy hook (deploy/server/certbot-deploy-hook.sh)
+          # copies the new files here, and the service switches to them by itself, without a restart.
+          reload-on-update: true
+          keystore:
+            certificate: ${app.tls.certificate:file:/opt/feature-conf/tls/fullchain.pem}
+            private-key: ${app.tls.private-key:file:/opt/feature-conf/tls/privkey.pem}
+
+  h2:
+    console:
+      # The H2 console can run code on the server through its JDBC URL field: never on a server reachable from outside
+      enabled: false
+
+app:
+  errors:
+    # Public service: error responses keep status, message and requestId, but leave out the internals (technical
+    # message and context). The evidence on the server still records them.
+    include-technical-message: false

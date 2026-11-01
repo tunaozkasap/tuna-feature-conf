@@ -1,0 +1,4 @@
+# Shell scripts and the server's files run on Linux: keep Unix line endings even in a Windows checkout
+*.sh text eol=lf
+deploy/server/** text eol=lf
+deploy/known_hosts text eol=lf

@@ -1,0 +1,34 @@
+# systemd unit for the service on the Scaleway server. Installed as /etc/systemd/system/feature-conf.service by
+# setup.sh. It runs whatever jar /opt/feature-conf/current.jar points to (activate-release.sh switches it). With the
+# prod profile the service serves HTTPS on 8443 itself, with the certificate in /opt/feature-conf/tls.
+#
+#   systemctl status feature-conf            is it running?
+#   journalctl -u feature-conf -o cat -f     its output, including the evidence lines
+
+[Unit]
+Description=tuna-feature-conf service (API and UI)
+After=network-online.target
+Wants=network-online.target
+# Nothing to start before the first deployment
+ConditionPathExists=/opt/feature-conf/current.jar
+
+[Service]
+User=feature-conf
+Group=feature-conf
+WorkingDirectory=/opt/feature-conf
+# The server has 1 GB shared with OpenVPN: cap the heap; one CPU core, so the simple serial garbage collector.
+# Port 8443 needs no root rights (only ports below 1024 do).
+ExecStart=/usr/bin/java -Xms128m -Xmx320m -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError -jar /opt/feature-conf/current.jar --spring.profiles.active=prod
+# Java exits with 143 when systemd stops it: that is a normal stop
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=5
+
+# The service needs nothing but its jar: everything else on the server is read-only or hidden to it
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

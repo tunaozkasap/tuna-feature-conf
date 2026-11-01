@@ -190,6 +190,8 @@ Nothing is kept on disk, so:
 - When you start the app yourself, run it in the background and send its output to a file in your scratchpad, then
   search that file.
 - When the user started it in their own terminal, read that terminal, or ask them for the output or the request id.
+- On the Scaleway server, the console goes to the journal: `journalctl -u feature-conf -o cat | grep '^{'` (see
+  "Deployment").
 - After a restart, earlier evidence is gone.
 
 ### How to read it
@@ -247,3 +249,18 @@ tests trigger integrity violations on purpose. Judge the build by the test summa
 To check a change end to end, start the app in the background with its output in a scratchpad file, send a request
 with your own `X-Request-Id`, then look up that id with `jq` (see the evidence section above). Stop the app when you
 are done, so port 8080 is free.
+
+## Deployment
+
+The service runs on a Scaleway Instance (`51.15.205.198`, 1 vCPU, 1 GB, Ubuntu 22.04) that is also an OpenVPN
+server. **Read `deploy/README.md` first.** In short:
+
+- Public, no password, nothing in front: with the `prod` profile (`application-prod.yml`) the service serves HTTPS
+  itself on port **8443** (443 belongs to OpenVPN; never take it). No H2 console, no technical details in error
+  responses. The user chose this over a web server in front (Caddy was tried and removed): don't add one back.
+- The certificate comes from certbot (standalone, port 80 only during checks); its deploy hook copies it to
+  `/opt/feature-conf/tls` and the service reloads it by itself (`reload-on-update`), without a restart.
+- `bash scripts/setup-server.sh` sets the server up (safe to repeat); `deploy/server/activate-release.sh` switches
+  to an uploaded jar and goes back to the previous one when the new one doesn't answer `/api-docs`.
+- Admin login: `ssh -i ~/.ssh/scaleway_feature_conf root@51.15.205.198`. Don't touch OpenVPN's files, ports or
+  firewall rules; a mistake there cuts the user off from their VPN.
