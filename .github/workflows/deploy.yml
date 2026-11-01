@@ -1,6 +1,6 @@
 # Every merge to main: build, run the backend and frontend tests, then deploy to the Scaleway server.
 # A failing test stops it before anything is deployed. "Run workflow" on the Actions tab starts it by hand.
-# See deploy/README.md.
+# The service is public at https://b635306c-bda8-49bb-842e-50044d5398a3.pub.instances.scw.cloud:8443. See deploy/README.md.
 #
 # Needs one repository secret, SCALEWAY_DEPLOY_KEY: the private key the server's deploy user accepts.
 

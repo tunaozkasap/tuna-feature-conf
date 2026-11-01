@@ -36,11 +36,10 @@ scp "${SSH_OPTIONS[@]}" -q "$JAR" "$SERVER:upload/$RELEASE.jar"
 echo "deploy: switching the server to $RELEASE"
 ssh "${SSH_OPTIONS[@]}" "$SERVER" sudo /opt/feature-conf/bin/activate-release.sh "$RELEASE"
 
-# From outside, the site must answer through Caddy with the password prompt (401): HTTPS and the proxy work.
-# activate-release.sh has already checked the service itself on the server.
-status="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 30 "$SITE_URL" || true)"
-if [[ "$status" != 401 ]]; then
-  echo "deploy: $SITE_URL answered $status instead of 401 (the password prompt)" >&2
+# From outside, with the certificate checked (activate-release.sh could only check the service on the server itself)
+status="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 30 "${SITE_URL}api-docs" || true)"
+if [[ "$status" != 200 ]]; then
+  echo "deploy: ${SITE_URL}api-docs answered '$status' instead of 200" >&2
   exit 1
 fi
 echo "deploy: $RELEASE is live at $SITE_URL"

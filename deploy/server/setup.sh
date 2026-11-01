@@ -2,24 +2,19 @@
 # One-time setup of the Scaleway server, run as root ON the server by scripts/setup-server.sh. Safe to run again:
 # every step checks what is already there, so a second run only updates the files from deploy/server.
 #
-# It installs Java 21 and Caddy, adds a swap file, creates the users, folders and the systemd service, and writes
-# Caddy's configuration (HTTPS on HTTPS_PORT, with a password prompt). It does not deploy the service itself:
+# It installs Java 21 and certbot, adds a swap file, creates the users, folders and the systemd service, and gets the
+# HTTPS certificate the service serves itself (on 8443, public, no password). It does not deploy the service itself:
 # that is activate-release.sh's job. It leaves OpenVPN, SSH and the firewall as they are.
 #
 # Settings, from the environment:
-#   SITE_NAME          the server's DNS name, used for the HTTPS certificate (required)
-#   HTTPS_PORT         the HTTPS port; 443 belongs to OpenVPN on this server (default 8443)
-#   UI_USER            the username for the password prompt (default admin)
+#   SITE_NAME          the server's DNS name, for the HTTPS certificate (required)
 #   DEPLOY_PUBLIC_KEY  the public SSH key GitHub Actions deploys with; the deploy user gets only this key (optional)
 set -euo pipefail
 
 SITE_NAME="${SITE_NAME:?SITE_NAME is required, e.g. b635306c-....pub.instances.scw.cloud}"
-HTTPS_PORT="${HTTPS_PORT:-8443}"
-UI_USER="${UI_USER:-admin}"
 DEPLOY_PUBLIC_KEY="${DEPLOY_PUBLIC_KEY:-}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR=/opt/feature-conf
-PASSWORD_FILE=/root/feature-conf-ui-password.txt
 
 step() { echo; echo "==== $*"; }
 
@@ -31,13 +26,9 @@ if [[ ! "$SITE_NAME" =~ ^[A-Za-z0-9.-]+$ ]]; then
   echo "setup: SITE_NAME must be a plain DNS name (got '$SITE_NAME')" >&2
   exit 1
 fi
-if [[ ! "$HTTPS_PORT" =~ ^[0-9]+$ || "$HTTPS_PORT" == 443 ]]; then
-  echo "setup: HTTPS_PORT must be a port number other than 443 (OpenVPN uses 443 here)" >&2
-  exit 1
-fi
 export DEBIAN_FRONTEND=noninteractive
 
-# ---- Swap: 1 GB of memory is shared by OpenVPN, Java and Caddy, so give the system room before anything runs out ---
+# ---- Swap: 1 GB of memory is shared by OpenVPN and Java, so give the system room before anything runs out ----------
 
 step "Swap file"
 if swapon --show | grep -q .; then
@@ -53,23 +44,27 @@ else
   sysctl -q -p /etc/sysctl.d/90-feature-conf-swap.conf
 fi
 
-# ---- Packages: Java 21 from Ubuntu, Caddy from Caddy's own repository (the official way to install it) -------------
+# ---- Caddy: the first version of this setup put Caddy (HTTPS and a password) in front. Take it away again. ----------
 
-step "Java 21, curl, jq"
-apt-get update -q
-apt-get install -y -q openjdk-21-jre-headless curl jq
-java -version 2>&1 | head -1
-
-step "Caddy"
-if ! command -v caddy > /dev/null; then
-  apt-get install -y -q debian-keyring debian-archive-keyring apt-transport-https gnupg
-  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
-    | gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' > /etc/apt/sources.list.d/caddy-stable.list
-  apt-get update -q
-  apt-get install -y -q caddy
+step "Caddy from the earlier setup"
+if dpkg -s caddy > /dev/null 2>&1; then
+  systemctl disable --now caddy || true
+  apt-get purge -y -q caddy
+  echo "removed Caddy"
+else
+  echo "not installed"
 fi
-caddy version
+rm -f /etc/apt/sources.list.d/caddy-stable.list /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+rm -rf /etc/caddy /var/lib/caddy
+rm -f /root/feature-conf-ui-password.txt
+
+# ---- Packages: Java 21 and certbot, both from Ubuntu ---------------------------------------------------------------
+
+step "Java 21, certbot, curl, jq"
+apt-get update -q
+apt-get install -y -q openjdk-21-jre-headless certbot curl jq
+java -version 2>&1 | head -1
+certbot --version
 
 # ---- Users: feature-conf runs the service, deploy only uploads jars and runs activate-release.sh ---------------------
 
@@ -79,7 +74,7 @@ id deploy > /dev/null 2>&1 || useradd --create-home --shell /bin/bash deploy
 # deploy may read the service's output (journalctl -u feature-conf) without sudo
 usermod -aG systemd-journal deploy
 
-install -d -o root -g feature-conf -m 0750 "$APP_DIR" "$APP_DIR/releases"
+install -d -o root -g feature-conf -m 0750 "$APP_DIR" "$APP_DIR/releases" "$APP_DIR/tls"
 install -d -o root -g root -m 0755 "$APP_DIR/bin"
 install -d -o deploy -g deploy -m 0700 /home/deploy/upload
 install -o root -g root -m 0755 "$HERE/activate-release.sh" "$APP_DIR/bin/activate-release.sh"
@@ -107,6 +102,24 @@ else
   echo "no DEPLOY_PUBLIC_KEY given: deploy can't log in yet"
 fi
 
+# ---- HTTPS certificate: certbot gets it from Let's Encrypt and renews it (certbot.timer, twice a day) ----------------
+# "standalone": certbot answers Let's Encrypt's check on port 80 itself, for the few seconds it takes; nothing else
+# listens on port 80 on this server.
+
+step "HTTPS certificate"
+install -d -m 0755 /etc/letsencrypt/renewal-hooks/deploy
+install -o root -g root -m 0755 "$HERE/certbot-deploy-hook.sh" /etc/letsencrypt/renewal-hooks/deploy/feature-conf.sh
+if [[ -d "/etc/letsencrypt/live/$SITE_NAME" ]]; then
+  echo "certificate already there (certbot renews it)"
+else
+  certbot certonly --standalone --non-interactive --agree-tos --register-unsafely-without-email \
+    --cert-name "$SITE_NAME" -d "$SITE_NAME"
+fi
+# Copy it for the service now; after each renewal certbot runs the hook itself
+RENEWED_LINEAGE="/etc/letsencrypt/live/$SITE_NAME" /etc/letsencrypt/renewal-hooks/deploy/feature-conf.sh
+systemctl enable --now certbot.timer
+certbot certificates --cert-name "$SITE_NAME" 2>/dev/null | grep -E "Domains|Expiry" || true
+
 # ---- The service: installed and switched on at boot; it starts with the first deployment ---------------------------
 
 step "systemd service"
@@ -120,29 +133,5 @@ else
   echo "no release deployed yet"
 fi
 
-# ---- Caddy: HTTPS and the password prompt -------------------------------------------------------------------------
-
-step "Password for the UI and API"
-if [[ -s /etc/caddy/feature-conf-users ]]; then
-  echo "kept the existing password (delete /etc/caddy/feature-conf-users and run again for a new one)"
-else
-  PASSWORD="$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-24)"
-  echo "$UI_USER $(caddy hash-password --plaintext "$PASSWORD")" > /etc/caddy/feature-conf-users
-  printf 'user:     %s\npassword: %s\n' "$UI_USER" "$PASSWORD" > "$PASSWORD_FILE"
-  chmod 600 "$PASSWORD_FILE"
-  echo "new password written to $PASSWORD_FILE (readable by root only)"
-fi
-chown root:caddy /etc/caddy/feature-conf-users
-chmod 640 /etc/caddy/feature-conf-users
-
-step "Caddy configuration"
-sed -e "s/__SITE_NAME__/$SITE_NAME/g" -e "s/__HTTPS_PORT__/$HTTPS_PORT/g" "$HERE/Caddyfile" > /tmp/feature-conf.Caddyfile
-caddy validate --adapter caddyfile --config /tmp/feature-conf.Caddyfile
-install -o root -g root -m 0644 /tmp/feature-conf.Caddyfile /etc/caddy/Caddyfile
-rm -f /tmp/feature-conf.Caddyfile
-systemctl enable caddy
-systemctl reload-or-restart caddy
-
 step "Done"
-echo "Site:     https://$SITE_NAME:$HTTPS_PORT (the certificate can take a minute on the first run)"
-echo "Password: cat $PASSWORD_FILE"
+echo "Site: https://$SITE_NAME:8443 (once a release with application-prod.yml's HTTPS settings is deployed)"

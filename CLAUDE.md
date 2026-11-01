@@ -255,8 +255,11 @@ are done, so port 8080 is free.
 The service runs on a Scaleway Instance (`51.15.205.198`, 1 vCPU, 1 GB, Ubuntu 22.04) that is also an OpenVPN
 server. **Read `deploy/README.md` first.** In short:
 
-- Caddy in front gives HTTPS on port **8443** (443 belongs to OpenVPN; never take it) and a password prompt; the
-  service listens on `127.0.0.1:8080` with the `prod` profile (`application-prod.yml`: no H2 console).
+- Public, no password, nothing in front: with the `prod` profile (`application-prod.yml`) the service serves HTTPS
+  itself on port **8443** (443 belongs to OpenVPN; never take it). No H2 console, no technical details in error
+  responses. The user chose this over a web server in front (Caddy was tried and removed): don't add one back.
+- The certificate comes from certbot (standalone, port 80 only during checks); its deploy hook copies it to
+  `/opt/feature-conf/tls` and the service reloads it by itself (`reload-on-update`), without a restart.
 - `bash scripts/setup-server.sh` sets the server up (safe to repeat); `deploy/server/activate-release.sh` switches
   to an uploaded jar and goes back to the previous one when the new one doesn't answer `/api-docs`.
 - Admin login: `ssh -i ~/.ssh/scaleway_feature_conf root@51.15.205.198`. Don't touch OpenVPN's files, ports or

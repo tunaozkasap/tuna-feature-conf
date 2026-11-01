@@ -14,7 +14,8 @@ UPLOAD_DIR=/home/deploy/upload
 APP_DIR=/opt/feature-conf
 RELEASES_DIR="$APP_DIR/releases"
 CURRENT="$APP_DIR/current.jar"
-HEALTH_URL=http://127.0.0.1:8080/api-docs
+# --insecure: the certificate is for the public name, not 127.0.0.1. deploy.sh checks it from outside afterwards.
+HEALTH_URL=https://127.0.0.1:8443/api-docs
 STARTUP_SECONDS=180
 RELEASES_KEPT=5
 
@@ -35,7 +36,7 @@ fi
 wait_until_healthy() {
   local waited=0
   while (( waited < STARTUP_SECONDS )); do
-    if curl --silent --fail --output /dev/null "$HEALTH_URL"; then
+    if curl --silent --fail --insecure --output /dev/null "$HEALTH_URL"; then
       echo "activate-release: the service answers after ${waited}s"
       return 0
     fi
