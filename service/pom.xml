@@ -22,6 +22,12 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
+            <!-- The built UI, served as static content from META-INF/resources -->
+            <groupId>com.tuna.feature.conf</groupId>
+            <artifactId>ui</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
