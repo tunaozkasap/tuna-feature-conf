@@ -48,6 +48,9 @@ public class OpenApiIntegrationTest {
                 .andExpect(jsonPath("$.components.schemas.EvaluationRequest.properties.requestContext").exists())
                 .andExpect(jsonPath("$.components.schemas.CrudResponseFeatureResponse.properties.items").exists())
                 .andExpect(jsonPath("$.components.schemas.ApiErrorResponse.properties.requestId").exists())
+                .andExpect(jsonPath("$.components.schemas.FeatureRuleUpdateRequest.properties.clearEffectiveTo.type").value("boolean"))
+                .andExpect(jsonPath("$.components.schemas.FilterVo.properties.value.oneOf[*].type")
+                        .value(org.hamcrest.Matchers.contains("string", "number", "boolean", "array")))
                 .andExpect(jsonPath("$.components.schemas.Response").doesNotExist())
                 .andExpect(jsonPath("$.components.schemas.CreateRequest").doesNotExist());
     }

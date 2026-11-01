@@ -122,6 +122,5 @@ export async function searchAll<T>(path: string, filters: Filter[], sorts: Sort[
 
 /** The filter "belongs to this project", the most common one. */
 export function inProject(projectId: number, field = 'project.id'): Filter {
-  // FilterVo.value is a Java Object, which the generated types can't describe; any JSON value is accepted
-  return { field, operator: 'EQUALS', value: projectId as unknown as Filter['value'] };
+  return { field, operator: 'EQUALS', value: projectId };
 }

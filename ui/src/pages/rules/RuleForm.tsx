@@ -88,8 +88,6 @@ export function RuleForm({ projectId, rule, fixedFeatureId, initialFeatureId, in
   }
 
   const selectedQualifier = qualifierOf(form.values.qualifierId);
-  const editingDates = rule !== undefined && (rule.effectiveFrom || rule.effectiveTo);
-
   return (
     <form onSubmit={form.onSubmit(submit)}>
       <Stack>
@@ -156,12 +154,6 @@ export function RuleForm({ projectId, rule, fixedFeatureId, initialFeatureId, in
           <TextInput type="datetime-local" label="Starts" description="Empty: active right away" {...form.getInputProps('effectiveFrom')} />
           <TextInput type="datetime-local" label="Ends" description="Empty: never ends" {...form.getInputProps('effectiveTo')} />
         </Group>
-        {editingDates && (
-          <Text size="xs" c="dimmed">
-            Clearing a start or end date of an existing rule is not supported by the API yet: the old date is kept.
-            Delete and re-create the rule instead.
-          </Text>
-        )}
         <TextInput label="Description" placeholder="Why this rule exists, e.g. a ticket number" {...form.getInputProps('description')} />
       </Stack>
       <FormButtons saving={save.isPending} onCancel={onDone} />

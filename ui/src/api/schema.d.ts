@@ -542,7 +542,8 @@ export interface components {
             field?: string;
             /** @enum {string} */
             operator?: "EQUALS" | "NOT_EQUALS" | "CONTAINS" | "STARTS_WITH" | "ENDS_WITH" | "GREATER_THAN" | "LESS_THAN" | "GREATER_THAN_OR_EQUAL" | "LESS_THAN_OR_EQUAL" | "IN" | "IS_NULL" | "IS_NOT_NULL";
-            value?: Record<string, never>;
+            /** @description The value to compare with: text, number or boolean, or a list of them for IN. Left out for IS_NULL and IS_NOT_NULL. */
+            value?: string | number | boolean | (string | number | boolean)[];
         };
         PageVo: {
             /** Format: int32 */
@@ -609,6 +610,8 @@ export interface components {
             /** Format: date-time */
             effectiveTo?: string;
             description?: string;
+            clearEffectiveFrom?: boolean;
+            clearEffectiveTo?: boolean;
         };
         CrudResponseFeatureRuleResponse: {
             success?: boolean;
