@@ -6,14 +6,14 @@
  *   if (features.isError) return <ErrorAlert error={features.error} />;
  */
 import type { ReactNode } from 'react';
-import { Alert, Center, Code, Loader, Stack, Text } from '@mantine/core';
+import { Alert, Center, Code, Loader, Stack, Text, ThemeIcon } from '@mantine/core';
 import { IconAlertTriangle, IconInbox } from '@tabler/icons-react';
 import { describeError } from './notify';
 
 export function Loading() {
   return (
-    <Center py="xl">
-      <Loader aria-label="Loading" />
+    <Center py={60}>
+      <Loader aria-label="Loading" type="dots" size="lg" />
     </Center>
   );
 }
@@ -22,7 +22,7 @@ export function Loading() {
 export function ErrorAlert({ error }: { error: unknown }) {
   const { message, requestId } = describeError(error);
   return (
-    <Alert color="red" title="Could not load the data" icon={<IconAlertTriangle />}>
+    <Alert color="red" variant="light" title="Could not load the data" icon={<IconAlertTriangle />}>
       <Text>{message}</Text>
       {requestId && (
         <Text size="sm" mt="xs">
@@ -33,19 +33,23 @@ export function ErrorAlert({ error }: { error: unknown }) {
   );
 }
 
-/** "Nothing here yet", with an optional button to create the first item. */
-export function EmptyState({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {
+/** "Nothing here yet", with an optional icon and a button to create the first item. */
+export function EmptyState({ title, description, action, icon }: { title: string; description?: string; action?: ReactNode; icon?: ReactNode }) {
   return (
-    <Center py="xl">
+    <Center py={48}>
       <Stack align="center" gap="xs">
-        <IconInbox size={40} stroke={1.2} color="var(--mantine-color-gray-5)" />
-        <Text fw={600}>{title}</Text>
+        <ThemeIcon size={56} radius="xl" variant="light" color="brand">
+          {icon ?? <IconInbox size={28} stroke={1.5} />}
+        </ThemeIcon>
+        <Text fw={600} mt="xs">
+          {title}
+        </Text>
         {description && (
-          <Text c="dimmed" size="sm" ta="center" maw={420}>
+          <Text c="dimmed" size="sm" ta="center" maw={440}>
             {description}
           </Text>
         )}
-        {action}
+        {action && <div style={{ marginTop: 8 }}>{action}</div>}
       </Stack>
     </Center>
   );

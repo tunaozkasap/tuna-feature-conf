@@ -107,4 +107,33 @@ describe('ProjectOverviewPage', () => {
     const endingSoon = screen.getByRole('heading', { name: 'Ending soon' }).parentElement!;
     expect(within(endingSoon).getByText('No active rule has an end date.')).toBeInTheDocument();
   });
+
+  test("a grid cell links to the feature's rules in that environment", async () => {
+    const { project } = await createProjectWithRules();
+
+    renderPage(`/projects/${project.id}`);
+
+    const cell = await screen.findByRole('link', { name: 'ACTIVE_ONE in DEV: 1 active of 1' });
+    expect(cell).toHaveAttribute('href', expect.stringMatching(new RegExp(`^/projects/${project.id}/features/\\d+\\?environment=DEV$`)));
+  });
+
+  test('an empty project shows the steps to get started', async () => {
+    const project = await createTestProject();
+    await createTestEnvironment(project.id);
+
+    renderPage(`/projects/${project.id}`);
+
+    expect(await screen.findByRole('heading', { name: 'Get started' })).toBeInTheDocument();
+    expect(screen.getByText('1 of 4 steps done. Each step needs the one before it.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Add qualifiers' })).toHaveAttribute('href', `/projects/${project.id}/qualifiers`);
+  });
+
+  test('a project with every step done has no "Get started" box', async () => {
+    const { project } = await createProjectWithRules();
+
+    renderPage(`/projects/${project.id}`);
+
+    await screen.findByRole('heading', { name: project.name, level: 2 });
+    expect(screen.queryByRole('heading', { name: 'Get started' })).not.toBeInTheDocument();
+  });
 });

@@ -142,4 +142,43 @@ describe('FeatureDetailPage', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(await fetchRules(project.id)).toEqual([]);
   });
+
+  test('ends the steps with what happens when no rule matches', async () => {
+    const { project, environment, qualifier, feature } = await createTestSetup();
+    await createTestRule({ featureId: feature.id, environmentId: environment.id, qualifierId: qualifier.id });
+    renderPage(`/projects/${project.id}/features/${feature.id}`);
+
+    await screen.findByRole('tab', { name: `${environment.code} (1)` });
+    const otherwise = screen.getByText('Otherwise').closest('tr')!;
+    expect(otherwise).toHaveTextContent('(no active rule matches the request)false');
+    // It is a footer line, not one of the rules
+    expect(ruleRows()).toHaveLength(1);
+  });
+
+  test('?environment= in the address opens that environment\'s tab', async () => {
+    const { project, environment: first, feature } = await createTestSetup();
+    const second = await createTestEnvironment(project.id);
+
+    renderPage(`/projects/${project.id}/features/${feature.id}?environment=${second.code}`);
+
+    expect(await screen.findByRole('tab', { name: `${second.code} (0)` })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: `${first.code} (0)` })).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByText(`No rules in ${second.code}`)).toBeInTheDocument();
+  });
+
+  test('the rule dialog sums up the rule as a sentence while it is filled in', async () => {
+    const { project, environment, qualifier, feature } = await createTestSetup();
+    const { user } = renderPage(`/projects/${project.id}/features/${feature.id}`);
+
+    await user.click(await screen.findByRole('button', { name: `Add rule in ${environment.code}` }));
+    const dialog = await screen.findByRole('dialog', { name: `New rule for ${feature.code}` });
+    const sentence = within(dialog).getByLabelText('What this rule does');
+    expect(sentence).toHaveTextContent(`In ${environment.code}, when … is …, ${feature.code} is …`);
+
+    await chooseOption(user, 'Qualifier', new RegExp(`^${qualifier.code} — `));
+    await user.type(within(dialog).getByRole('textbox', { name: 'Equal to' }), 'NL');
+    await user.type(within(dialog).getByRole('textbox', { name: 'Value' }), 'on');
+
+    expect(sentence).toHaveTextContent(`In ${environment.code}, when ${qualifier.code} is NL, ${feature.code} is on`);
+  });
 });

@@ -1,10 +1,12 @@
 /**
  * Create or edit a rule: "In <environment>, when <qualifier> is <value>, <feature> has the value <value>".
+ * That sentence is shown at the top of the form and changes as the fields are filled in, so it's clear what the rule
+ * will do before it is saved.
  *
  * The qualifier value input changes with the chosen qualifier's type (see QualifierValueInput). The feature and the
  * environment can be fixed by the caller, e.g. on a feature's page the feature is always that feature.
  */
-import { Group, NumberInput, Select, Stack, Switch, Text, TextInput, Textarea } from '@mantine/core';
+import { Code, Divider, Group, NumberInput, Paper, Select, Stack, Switch, Text, TextInput, Textarea } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useEnvironments } from '../../api/environments';
 import { useFeatures } from '../../api/features';
@@ -88,9 +90,20 @@ export function RuleForm({ projectId, rule, fixedFeatureId, initialFeatureId, in
   }
 
   const selectedQualifier = qualifierOf(form.values.qualifierId);
+  const selectedFeature = features.data?.find((feature) => String(feature.id) === form.values.featureId);
+  const selectedEnvironment = environments.data?.find((environment) => String(environment.id) === form.values.environmentId);
   return (
     <form onSubmit={form.onSubmit(submit)}>
       <Stack>
+        <RuleSentence
+          environment={selectedEnvironment?.code}
+          qualifier={selectedQualifier?.code}
+          qualifierValue={form.values.qualifierValue}
+          feature={selectedFeature?.code}
+          featureValue={form.values.featureValue}
+        />
+
+        <Divider label="Where" labelPosition="left" />
         <Select
           label="Feature"
           data={(features.data ?? []).map((feature) => ({ value: String(feature.id), label: `${feature.code} — ${feature.name}` }))}
@@ -108,9 +121,7 @@ export function RuleForm({ projectId, rule, fixedFeatureId, initialFeatureId, in
           {...form.getInputProps('environmentId')}
         />
 
-        <Text fw={600} size="sm" mt="xs">
-          When the request has…
-        </Text>
+        <Divider label="When the request has…" labelPosition="left" mt="xs" />
         <Select
           label="Qualifier"
           description="Higher priority qualifiers are checked first."
@@ -133,9 +144,7 @@ export function RuleForm({ projectId, rule, fixedFeatureId, initialFeatureId, in
           error={form.errors.qualifierValue}
         />
 
-        <Text fw={600} size="sm" mt="xs">
-          …the feature's value is
-        </Text>
+        <Divider label="…the feature's value is" labelPosition="left" mt="xs" />
         <Textarea
           label="Value"
           description='What evaluations return, e.g. true, 50, embedding-v2 or {"title":"Sale"}.'
@@ -146,6 +155,7 @@ export function RuleForm({ projectId, rule, fixedFeatureId, initialFeatureId, in
           {...form.getInputProps('featureValue')}
         />
 
+        <Divider label="Order and schedule" labelPosition="left" mt="xs" />
         <Group grow align="flex-start">
           <NumberInput label="Rule priority" description="Breaks ties between rules on the same qualifier." {...form.getInputProps('priority')} />
           <Switch label="Switched on" mt={30} {...form.getInputProps('enabled', { type: 'checkbox' })} />
@@ -158,5 +168,25 @@ export function RuleForm({ projectId, rule, fixedFeatureId, initialFeatureId, in
       </Stack>
       <FormButtons saving={save.isPending} onCancel={onDone} />
     </form>
+  );
+}
+
+interface RuleSentenceProps {
+  environment?: string;
+  qualifier?: string;
+  qualifierValue: string;
+  feature?: string;
+  featureValue: string;
+}
+
+/** "In PROD, when COUNTRY is DE, NEW_CHECKOUT is true", with "…" for what isn't filled in yet. */
+function RuleSentence({ environment, qualifier, qualifierValue, feature, featureValue }: RuleSentenceProps) {
+  const part = (value: string | undefined) => <Code>{value && value.trim() !== '' ? value : '…'}</Code>;
+  return (
+    <Paper withBorder p="sm" radius="md" bg="var(--mantine-color-brand-light)" aria-label="What this rule does">
+      <Text size="sm" lh={1.9}>
+        In {part(environment)}, when {part(qualifier)} is {part(qualifierValue)}, {part(feature)} is {part(featureValue)}
+      </Text>
+    </Paper>
   );
 }

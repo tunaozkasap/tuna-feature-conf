@@ -26,9 +26,12 @@ export async function deleteFeature(id: number): Promise<void> {
 
 // ---- Hooks for the screens ---------------------------------------------------------------------------------------
 
-/** The project's features, sorted by code. */
-export function useFeatures(projectId: number) {
-  return useQuery({ queryKey: queryKeys.features(projectId), queryFn: () => fetchFeatures(projectId) });
+/**
+ * The project's features, sorted by code. With `enabled` false nothing is loaded (the search window outside a project
+ * uses that).
+ */
+export function useFeatures(projectId: number, enabled = true) {
+  return useQuery({ queryKey: queryKeys.features(projectId), queryFn: () => fetchFeatures(projectId), enabled });
 }
 
 /** Creates the feature, or updates it when an `id` is given. */

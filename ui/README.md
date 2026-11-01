@@ -34,7 +34,9 @@ ui/
 ├── src/
 │   ├── main.tsx               start: puts <App /> on the page inside the providers
 │   ├── App.tsx                every address and the page it shows  ← start reading here
-│   ├── AppProviders.tsx       theme, notifications, data cache (also used by the tests)
+│   ├── AppProviders.tsx       theme, light/dark mode, notifications, data cache (also used by the tests)
+│   ├── theme.ts               colours (the `brand` accent), font, radius and component defaults
+│   ├── styles.css             what a theme can't express: surfaces per light/dark mode, side menu, rule colours
 │   ├── queryClient.ts         data cache settings; every failed save shows an error notification
 │   ├── api/                   everything that talks to the backend
 │   │   ├── schema.d.ts        GENERATED from /api-docs, never edit by hand
@@ -43,8 +45,9 @@ ui/
 │   │   ├── queryKeys.ts       names of the cached lists
 │   │   └── projects.ts, environments.ts, qualifiers.ts, features.ts, rules.ts, evaluation.ts
 │   │                          per entity: plain API calls, then the hooks the screens use
-│   ├── components/            pieces used by several screens (layout, badges, delete button, page states)
-│   ├── hooks/useProjectId.ts  the project id from the address
+│   ├── components/            pieces used by several screens (layout, search window, badges, delete button,
+│   │                          page header with breadcrumbs, page states)
+│   ├── hooks/                 the project id from the address; the breadcrumbs of a project page
 │   ├── utils/                 logic without UI: rule status and evaluation order (mirrors the Java code), dates
 │   └── pages/                 one folder per screen: the page and its form
 └── test/                      test setup: starts the real service jar before the frontend tests
@@ -63,7 +66,32 @@ ui/
 | `/projects/:id/environments` | Environments | Where does the application run? |
 | `/projects/:id/qualifiers` | Qualifiers | What can rules match on, and in which order are they checked? |
 
-The project picker in the header switches project and stays on the same screen.
+The project picker in the header switches project and stays on the same screen. **Ctrl+K** (⌘K, or `/`, or the
+Search box in the header) opens a search window (`components/CommandPalette.tsx`, Mantine Spotlight) that jumps to any
+screen, feature of the open project, or project.
+
+Small helps on the screens:
+
+- Overview: "Get started" steps while a project lacks environments, qualifiers, features or rules; every cell of the
+  features × environments grid links to `/features/:id?environment=CODE`.
+- Feature: the rules of an environment are numbered steps in evaluation order, ending with "Otherwise → false".
+  `?environment=CODE` in the address opens that tab.
+- Rules: one button per status with its count sets the status filter; "Clear filters" resets them.
+- Rule dialog: a sentence at the top ("In PROD, when COUNTRY is DE, NEW_CHECKOUT is true") follows the fields.
+- Evaluate: "Compare across environments" sends the same request to every environment; the request is shown as JSON
+  or as a curl command.
+
+## Look and feel
+
+- Colours, font and component defaults are in `src/theme.ts`; the accent colour is called `brand` (use
+  `color="brand"`). Environment badges get a fixed colour per code (PROD red, STAGING orange, DEV cyan, ...;
+  `environmentColor` in `components/Badges.tsx`), rule statuses one colour each (`statusColor`).
+- Light and dark mode: `MantineProvider defaultColorScheme="auto"` follows the OS; the sun/moon button in the header
+  overrides it and Mantine remembers the choice in localStorage. A small script in `index.html` applies it before
+  React starts, so there is no white flash.
+- `src/styles.css` holds the rest, as plain CSS classes used by name (`app-header`, `clickable-card`, `rule-row`,
+  `step-number`, `value-panel`, ...). `@mixin dark { }` and `light-dark(a, b)` there come from postcss-preset-mantine.
+- The Inter font is bundled (`@fontsource-variable/inter`), so the jar needs no internet access to look right.
 
 ## How one screen works: the Features page
 
@@ -105,7 +133,7 @@ place in the UI that no longer fits. The frontend tests also fail when `schema.d
 `{...form.getInputProps('field')}`, and show it in the table.
 
 **A new screen.** Add a file in `src/pages/...`, a `<Route>` in `App.tsx`, a menu entry in
-`components/AppLayout.tsx`. Addresses under `/projects/...` already work on reload; another top-level address needs
+`components/AppLayout.tsx` (the search window lists the same entries), and `useProjectBreadcrumbs` for its trail. Addresses under `/projects/...` already work on reload; another top-level address needs
 a mapping in the service's `SpaForwardController`.
 
 ## Commands

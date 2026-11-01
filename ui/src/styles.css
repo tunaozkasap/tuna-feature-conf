@@ -1,0 +1,218 @@
+/*
+ * The app's own CSS, on top of Mantine's. Colours, fonts and component defaults are in theme.ts; this file holds what
+ * a theme can't express. Every class is used by name in the components (search for it, e.g. "app-surface").
+ *
+ * `@mixin dark { ... }` (from postcss-preset-mantine) applies its rules only in dark mode;
+ * `light-dark(a, b)` picks a in light mode and b in dark mode.
+ */
+
+/* ---- Surfaces --------------------------------------------------------------------------------------------------- */
+
+:root {
+  /* The page background behind the cards: slightly off-white, so white cards stand out */
+  --app-background: #f7f7fa;
+  --app-header-background: rgba(255, 255, 255, 0.85);
+  --app-sidebar-background: #fbfbfd;
+  --app-card-background: #ffffff;
+  --app-subtle-text: #667085;
+}
+
+/* Mantine puts data-mantine-color-scheme on <html> (which is :root) */
+:root[data-mantine-color-scheme='dark'] {
+  --app-background: #121218;
+  --app-header-background: rgba(26, 27, 34, 0.85);
+  --app-sidebar-background: #17171e;
+  --app-card-background: #1c1c24;
+  --app-subtle-text: #9aa0ad;
+}
+
+body {
+  background: var(--app-background);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Cards and tables use the card colour in both schemes */
+.mantine-Card-root,
+.app-panel {
+  background: var(--app-card-background);
+}
+
+/* The header: translucent, so content scrolling under it shows through faintly */
+.app-header {
+  background: var(--app-header-background);
+  backdrop-filter: saturate(180%) blur(10px);
+}
+
+.app-sidebar {
+  background: var(--app-sidebar-background);
+}
+
+/* The page area: content centred with a comfortable maximum width */
+.app-content {
+  max-width: 1320px;
+  margin: 0 auto;
+}
+
+/* ---- Logo ------------------------------------------------------------------------------------------------------- */
+
+.app-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  background: linear-gradient(135deg, var(--mantine-color-brand-5), #a855f7);
+  box-shadow: 0 2px 8px rgba(95, 82, 231, 0.35);
+}
+
+/* ---- Side menu -------------------------------------------------------------------------------------------------- */
+
+.app-nav-link {
+  border-radius: var(--mantine-radius-md);
+  margin-bottom: 2px;
+  font-weight: 500;
+
+  &[data-active] {
+    font-weight: 600;
+  }
+}
+
+/* The block at the top of the side menu that names the open project */
+.app-project-card {
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: var(--mantine-radius-md);
+  background: var(--app-card-background);
+}
+
+/* ---- Cards you can click ---------------------------------------------------------------------------------------- */
+
+.clickable-card {
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+  color: inherit;
+  text-decoration: none;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--mantine-shadow-md);
+    border-color: var(--mantine-color-brand-3);
+  }
+
+  @mixin dark {
+    &:hover {
+      border-color: var(--mantine-color-brand-7);
+    }
+  }
+}
+
+/* The coloured square holding a stat tile's icon */
+.stat-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---- Overview: features × environments grid --------------------------------------------------------------------- */
+
+.heat-cell {
+  display: inline-flex;
+  min-width: 44px;
+  justify-content: center;
+  text-decoration: none;
+  border-radius: var(--mantine-radius-sm);
+  transition: transform 100ms ease;
+
+  &:hover {
+    transform: scale(1.08);
+  }
+}
+
+/* ---- Rules: a coloured edge per status, the same colours as RuleStatusBadge ------------------------------------- */
+
+.rule-row {
+  &[data-status='ACTIVE'] > td:first-child {
+    box-shadow: inset 3px 0 0 var(--mantine-color-teal-5);
+  }
+  &[data-status='SCHEDULED'] > td:first-child {
+    box-shadow: inset 3px 0 0 var(--mantine-color-blue-5);
+  }
+  &[data-status='EXPIRED'] > td:first-child {
+    box-shadow: inset 3px 0 0 var(--mantine-color-gray-5);
+  }
+  &[data-status='DISABLED'] > td:first-child {
+    box-shadow: inset 3px 0 0 var(--mantine-color-red-5);
+  }
+  &[data-status='EXPIRED'],
+  &[data-status='DISABLED'] {
+    opacity: 0.72;
+  }
+}
+
+/* The numbered circle in front of a rule on a feature's page: "checked as number 2" */
+.step-number {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--mantine-color-brand-7);
+  background: var(--mantine-color-brand-0);
+  border: 1px solid var(--mantine-color-brand-2);
+
+  @mixin dark {
+    color: var(--mantine-color-brand-2);
+    background: rgba(95, 82, 231, 0.18);
+    border-color: var(--mantine-color-brand-8);
+  }
+}
+
+/* The "Otherwise → false" line under a feature's rules */
+.fallback-row > td {
+  background: light-dark(#f4f4f8, #1f1f28);
+  border-top: 1px dashed var(--mantine-color-default-border);
+}
+
+/* ---- Evaluate: the big resolved value --------------------------------------------------------------------------- */
+
+.value-panel {
+  border-radius: var(--mantine-radius-md);
+  padding: var(--mantine-spacing-md);
+  border: 1px solid var(--mantine-color-default-border);
+
+  &[data-kind='true'] {
+    background: light-dark(var(--mantine-color-teal-0), rgba(18, 184, 134, 0.12));
+    border-color: light-dark(var(--mantine-color-teal-3), var(--mantine-color-teal-8));
+  }
+  &[data-kind='false'] {
+    background: light-dark(var(--mantine-color-gray-0), rgba(134, 142, 150, 0.12));
+  }
+  &[data-kind='value'] {
+    background: light-dark(var(--mantine-color-brand-0), rgba(95, 82, 231, 0.12));
+    border-color: light-dark(var(--mantine-color-brand-2), var(--mantine-color-brand-8));
+  }
+
+  /* The value itself is a <pre> (Mantine's Code block); let the panel's colour show through */
+  & pre {
+    background: transparent;
+    padding: 0;
+    font-size: 22px;
+    font-weight: 600;
+  }
+}
+
+/* Keyboard key, as in "Ctrl K" on the search button */
+.kbd-hint {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--mantine-color-default-border);
+  color: var(--app-subtle-text);
+  font-family: var(--mantine-font-family-monospace);
+}
