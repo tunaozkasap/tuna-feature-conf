@@ -52,7 +52,8 @@ wait_until_healthy() {
 
 # ---- Switch to the new jar ---------------------------------------------------------------------------------------
 
-PREVIOUS="$(readlink -f "$CURRENT" || true)"
+# The jar that runs now; empty before the first deployment (-e: only when the link and its target exist)
+PREVIOUS="$(readlink -e "$CURRENT" || true)"
 install -o root -g feature-conf -m 0640 "$UPLOADED" "$RELEASES_DIR/$RELEASE.jar"
 rm -f "$UPLOADED"
 ln -sfn "$RELEASES_DIR/$RELEASE.jar" "$CURRENT"
