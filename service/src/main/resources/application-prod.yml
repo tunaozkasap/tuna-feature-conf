@@ -1,0 +1,12 @@
+# Settings for the Scaleway server, on top of application.yml. Switched on by deploy/server/feature-conf.service
+# (--spring.profiles.active=prod). See deploy/README.md.
+
+server:
+  # Only reachable from the server itself. Caddy (HTTPS and the password prompt) passes requests on from outside.
+  address: 127.0.0.1
+
+spring:
+  h2:
+    console:
+      # The H2 console can run code on the server through its JDBC URL field: never on a server reachable from outside
+      enabled: false

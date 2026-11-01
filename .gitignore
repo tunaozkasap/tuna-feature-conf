@@ -1,6 +1,7 @@
 # Ignore all dotfiles and dotfolders
 .*
 !.gitignore
+!.gitattributes
 # Shared Claude Code project settings; personal overrides stay local
 !.claude/
 .claude/settings.local.json

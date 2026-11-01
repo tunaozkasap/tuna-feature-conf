@@ -1,0 +1,17 @@
+# Caddy, the web server in front of the service: HTTPS with a free Let's Encrypt certificate (renewed by Caddy
+# itself) and a username/password prompt for everything, UI and API. Installed as /etc/caddy/Caddyfile by setup.sh,
+# which fills in __SITE_NAME__ and __HTTPS_PORT__.
+
+{
+	# Port 443 belongs to OpenVPN on this server. Caddy uses port 80 to prove to Let's Encrypt that it owns the name
+	# (and to send plain-HTTP visitors to HTTPS), and __HTTPS_PORT__ for HTTPS.
+	https_port __HTTPS_PORT__
+}
+
+__SITE_NAME__:__HTTPS_PORT__ {
+	basic_auth {
+		# One "<user> <bcrypt hash>" line, written by setup.sh. The password itself is not stored here.
+		import /etc/caddy/feature-conf-users
+	}
+	reverse_proxy 127.0.0.1:8080
+}
