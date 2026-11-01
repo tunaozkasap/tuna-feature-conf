@@ -15,3 +15,9 @@ __SITE_NAME__:__HTTPS_PORT__ {
 	}
 	reverse_proxy 127.0.0.1:8080
 }
+
+# Plain HTTP goes to HTTPS. Written out because Caddy's automatic redirect leaves out the port when it is https_port,
+# which would send visitors to 443, OpenVPN. Let's Encrypt's checks on port 80 still work: Caddy answers them first.
+http://__SITE_NAME__ {
+	redir https://__SITE_NAME__:__HTTPS_PORT__{uri} permanent
+}
