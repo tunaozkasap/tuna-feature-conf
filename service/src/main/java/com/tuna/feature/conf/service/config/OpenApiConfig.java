@@ -6,6 +6,7 @@ import io.swagger.v3.core.converter.ModelConverters;
 import io.swagger.v3.core.jackson.ModelResolver;
 import io.swagger.v3.core.jackson.TypeNameResolver;
 import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.media.ArraySchema;
 import io.swagger.v3.oas.models.media.Schema;
 import org.springdoc.core.customizers.OpenApiCustomizer;
 import io.swagger.v3.oas.models.info.Contact;
@@ -14,6 +15,7 @@ import io.swagger.v3.oas.models.info.License;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.List;
 import java.util.Map;
 
 @Configuration
@@ -56,6 +58,31 @@ public class OpenApiConfig {
                 openApi.getComponents().addSchemas(schema.getKey(), schema.getValue());
             }
         };
+    }
+
+    /**
+     * Describes {@code FilterVo.value}, a Java {@code Object}: a text, number or boolean, or a list of them for
+     * {@code IN}. Left as is, springdoc says "object", which the UI's generated types can't use.
+     */
+    @Bean
+    public OpenApiCustomizer filterValueSchema() {
+        return openApi -> {
+            Schema<?> filter = openApi.getComponents().getSchemas().get("FilterVo");
+            if (filter == null || filter.getProperties() == null) {
+                return;
+            }
+            Schema<Object> value = new Schema<>();
+            value.setDescription("The value to compare with: text, number or boolean, or a list of them for IN. "
+                    + "Left out for IS_NULL and IS_NOT_NULL.");
+            value.setOneOf(List.of(scalarSchema("string"), scalarSchema("number"), scalarSchema("boolean"),
+                    new ArraySchema().items(new Schema<>().oneOf(List.of(scalarSchema("string"),
+                            scalarSchema("number"), scalarSchema("boolean"))))));
+            filter.getProperties().put("value", value);
+        };
+    }
+
+    private static Schema<?> scalarSchema(String type) {
+        return new Schema<>().type(type);
     }
 
     static class DtoTypeNameResolver extends TypeNameResolver {

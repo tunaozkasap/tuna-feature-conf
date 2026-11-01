@@ -5,7 +5,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, inProject, searchAll } from './http';
 import { queryKeys } from './queryKeys';
-import type { Rule, RuleInput, RuleResponse } from './types';
+import type { Rule, RuleInput, RuleResponse, RuleUpdateInput } from './types';
 
 // ---- API calls ---------------------------------------------------------------------------------------------------
 
@@ -19,13 +19,18 @@ export async function createRule(input: RuleInput): Promise<Rule> {
   return response.data as Rule;
 }
 
-/**
- * Sends every field. Note: the backend ignores empty fields on update, so a start or end date that is cleared in the
- * form keeps its old value.
- */
-export async function updateRule(id: number, input: RuleInput): Promise<Rule> {
+/** Changes the given fields; fields left out stay as they are. */
+export async function updateRule(id: number, input: RuleUpdateInput): Promise<Rule> {
   const response = await apiRequest<RuleResponse>('PUT', `/api/rules/${id}`, { data: input });
   return response.data as Rule;
+}
+
+/**
+ * The update for a rule saved from the form, where every field is filled in as the user wants it. The backend leaves
+ * empty fields unchanged, so a start or end date the user emptied has to be cleared explicitly.
+ */
+export function updateFromForm(input: RuleInput): RuleUpdateInput {
+  return { ...input, clearEffectiveFrom: !input.effectiveFrom, clearEffectiveTo: !input.effectiveTo };
 }
 
 /** Switches a rule on or off without touching anything else. */
@@ -44,11 +49,12 @@ export function useRules(projectId: number) {
   return useQuery({ queryKey: queryKeys.rules(projectId), queryFn: () => fetchRules(projectId) });
 }
 
-/** Creates the rule, or updates it when an `id` is given. */
+/** Creates the rule from the form, or updates it to match the form when an `id` is given. */
 export function useSaveRule(projectId: number) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, input }: { id?: number; input: RuleInput }) => (id ? updateRule(id, input) : createRule(input)),
+    mutationFn: ({ id, input }: { id?: number; input: RuleInput }) =>
+      id ? updateRule(id, updateFromForm(input)) : createRule(input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.rules(projectId) }),
   });
 }

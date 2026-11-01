@@ -107,6 +107,26 @@ describe('FeatureDetailPage', () => {
     expect(await fetchRules(project.id)).toEqual([expect.objectContaining({ id: rule.id, enabled: false })]);
   });
 
+  test('emptying "Starts" of a scheduled rule makes it Active', async () => {
+    const { project, environment, qualifier, feature } = await createTestSetup();
+    const startsAt = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
+    const rule = await createTestRule({ featureId: feature.id, environmentId: environment.id, qualifierId: qualifier.id, effectiveFrom: startsAt });
+    const { user } = renderPage(`/projects/${project.id}/features/${feature.id}`);
+
+    expect(await within(await waitFor(() => ruleRow(rule.id))).findByText('Scheduled')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: `Edit rule ${rule.id}` }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit rule' });
+    const starts = within(dialog).getByLabelText('Starts');
+    expect(starts).not.toHaveValue('');
+    await user.clear(starts);
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(await within(ruleRow(rule.id)).findByText('Active')).toBeInTheDocument();
+    const [saved] = await fetchRules(project.id);
+    expect(saved.effectiveFrom ?? null).toBeNull();
+  });
+
   test('deletes a rule after asking', async () => {
     const { project, environment, qualifier, feature } = await createTestSetup();
     const rule = await createTestRule({ featureId: feature.id, environmentId: environment.id, qualifierId: qualifier.id, qualifierValue: 'NL' });

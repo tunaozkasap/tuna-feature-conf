@@ -20,7 +20,7 @@ import { createFeature, deleteFeature, fetchFeatures, updateFeature } from './fe
 import { ApiError } from './http';
 import { createProject, deleteProject, fetchProjects, updateProject } from './projects';
 import { createQualifier, deleteQualifier, fetchQualifiers, updateQualifier } from './qualifiers';
-import { deleteRule, fetchRules, setRuleEnabled, updateRule } from './rules';
+import { deleteRule, fetchRules, setRuleEnabled, updateFromForm, updateRule } from './rules';
 
 function ids(rows: { id: number }[]): number[] {
   return rows.map((row) => row.id);
@@ -159,6 +159,36 @@ describe('rules', () => {
 
     await deleteRule(rule.id);
     expect(await fetchRules(project.id)).toEqual([]);
+  });
+
+  test('an update keeps the dates it leaves out; one made from the form clears the dates emptied there', async () => {
+    const { environment, qualifier, feature } = await createTestSetup();
+    const startsAt = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+    const endsAt = new Date(Date.now() + 30 * 24 * 3600 * 1000);
+    const refs = { featureId: feature.id, environmentId: environment.id, qualifierId: qualifier.id };
+    const rule = await createTestRule({ ...refs, effectiveFrom: startsAt.toISOString(), effectiveTo: endsAt.toISOString() });
+
+    // Dates left out: the backend keeps them
+    const kept = await updateRule(rule.id, { featureValue: 'off' });
+    expect(kept.featureValue).toBe('off');
+    expect(new Date(kept.effectiveFrom!).getTime()).toBe(startsAt.getTime());
+    expect(new Date(kept.effectiveTo!).getTime()).toBe(endsAt.getTime());
+
+    // Saved from the form with "Starts" emptied: the start date goes, the end date stays
+    const form = { ...refs, qualifierValue: 'match-me', featureValue: 'off', priority: 0, enabled: true, effectiveTo: endsAt.toISOString() };
+    const cleared = await updateRule(rule.id, updateFromForm(form));
+    expect(cleared.effectiveFrom ?? null).toBeNull();
+    expect(new Date(cleared.effectiveTo!).getTime()).toBe(endsAt.getTime());
+  });
+
+  test('an update that both sets and clears a date is refused with a message', async () => {
+    const { environment, qualifier, feature } = await createTestSetup();
+    const rule = await createTestRule({ featureId: feature.id, environmentId: environment.id, qualifierId: qualifier.id });
+
+    const error = await updateRule(rule.id, { effectiveTo: new Date().toISOString(), clearEffectiveTo: true }).catch((e) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.status).toBe(400);
+    expect(error.message).toContain("either set or clear 'effectiveTo'");
   });
 });
 

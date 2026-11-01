@@ -54,6 +54,13 @@ public class FeatureRuleDto {
         private Instant effectiveFrom;
         private Instant effectiveTo;
         private String description;
+        /**
+         * Empty fields are left unchanged, so a date can't be removed by leaving it out: true removes the start date
+         * (the rule applies right away). Can't be combined with a new {@code effectiveFrom}.
+         */
+        private Boolean clearEffectiveFrom;
+        /** true removes the end date (the rule never ends). Can't be combined with a new {@code effectiveTo}. */
+        private Boolean clearEffectiveTo;
     }
 
     @Data

@@ -131,6 +131,8 @@ public class FeatureRuleService {
                 s().kv("rejected", "missingData");
                 throw new InvalidRequestException("rule", "missingData");
             }
+            rejectSetAndClear("effectiveFrom", data.getEffectiveFrom(), data.getClearEffectiveFrom());
+            rejectSetAndClear("effectiveTo", data.getEffectiveTo(), data.getClearEffectiveTo());
 
             FeatureRuleEntity entity = ruleRepository.findById(id)
                     .orElseThrow(() -> new ResourceNotFoundException("rule", "id", id));
@@ -171,11 +173,19 @@ public class FeatureRuleService {
                 entity.setEnabled(data.getEnabled());
                 changedFields.add("enabled");
             }
-            if (data.getEffectiveFrom() != null) {
+            // Empty fields mean "unchanged", so removing a date needs its own flag
+            List<String> clearedFields = new ArrayList<>();
+            if (Boolean.TRUE.equals(data.getClearEffectiveFrom())) {
+                entity.setEffectiveFrom(null);
+                clearedFields.add("effectiveFrom");
+            } else if (data.getEffectiveFrom() != null) {
                 entity.setEffectiveFrom(data.getEffectiveFrom());
                 changedFields.add("effectiveFrom");
             }
-            if (data.getEffectiveTo() != null) {
+            if (Boolean.TRUE.equals(data.getClearEffectiveTo())) {
+                entity.setEffectiveTo(null);
+                clearedFields.add("effectiveTo");
+            } else if (data.getEffectiveTo() != null) {
                 entity.setEffectiveTo(data.getEffectiveTo());
                 changedFields.add("effectiveTo");
             }
@@ -183,7 +193,7 @@ public class FeatureRuleService {
                 entity.setDescription(data.getDescription());
                 changedFields.add("description");
             }
-            s().kv("changedFields", changedFields);
+            s().kv("changedFields", changedFields).kv("clearedFields", clearedFields);
 
             ensureSameProject(entity);
             recordRuleValues(entity);
@@ -236,6 +246,14 @@ public class FeatureRuleService {
                     .with("featureProjectId", featureProjectId);
         }
         projectCheck.kv("passed", true);
+    }
+
+    /** An update can set a date or clear it, not both. */
+    private static void rejectSetAndClear(String field, Instant newValue, Boolean clear) {
+        if (newValue != null && Boolean.TRUE.equals(clear)) {
+            s().kv("rejected", "setAndClear").kv("field", field);
+            throw new InvalidRequestException("rule", "setAndClear").with("field", field);
+        }
     }
 
     private static void recordRuleValues(FeatureRuleEntity entity) {

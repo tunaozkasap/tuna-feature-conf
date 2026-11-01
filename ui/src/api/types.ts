@@ -38,6 +38,8 @@ export type EnvironmentInput = Schemas['EnvironmentCreateRequest'];
 export type QualifierInput = Schemas['FeatureQualifierCreateRequest'];
 export type FeatureInput = Schemas['FeatureCreateRequest'];
 export type RuleInput = Schemas['FeatureRuleCreateRequest'];
+/** Like RuleInput, plus `clearEffectiveFrom` / `clearEffectiveTo` to remove a date (empty fields mean "unchanged"). */
+export type RuleUpdateInput = Schemas['FeatureRuleUpdateRequest'];
 export type EvaluationInput = Schemas['EvaluationRequest'];
 
 /** TEXT, NUMERIC, BOOLEAN or JSON: what kind of value a qualifier holds. */
