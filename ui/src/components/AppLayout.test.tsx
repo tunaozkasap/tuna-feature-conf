@@ -45,4 +45,29 @@ describe('AppLayout', () => {
     expect(await findRow(secondFeature.code)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Features', level: 2 })).toBeInTheDocument();
   });
+
+  test('the sun/moon button switches between light and dark mode', async () => {
+    const { user } = renderPage('/projects');
+    const toggle = await screen.findByRole('button', { name: /^Switch to (dark|light) mode$/ });
+    const before = document.documentElement.getAttribute('data-mantine-color-scheme');
+    const expected = toggle.getAttribute('aria-label') === 'Switch to dark mode' ? 'dark' : 'light';
+    expect(before).not.toBe(expected);
+
+    await user.click(toggle);
+
+    await waitFor(() => expect(document.documentElement).toHaveAttribute('data-mantine-color-scheme', expected));
+    expect(screen.getByRole('button', { name: `Switch to ${expected === 'dark' ? 'light' : 'dark'} mode` })).toBeInTheDocument();
+  });
+
+  test('the search window finds a feature of the open project and opens it', async () => {
+    const { first, firstFeature } = await createTwoProjects();
+    const { user } = renderPage(`/projects/${first.id}`);
+    await screen.findByRole('heading', { name: first.name, level: 2 });
+
+    await user.click(screen.getByRole('button', { name: 'Open search' }));
+    await user.type(await screen.findByRole('textbox', { name: 'Search' }), firstFeature.code);
+    await user.click(await screen.findByRole('button', { name: new RegExp(firstFeature.code) }));
+
+    expect(await screen.findByRole('heading', { name: new RegExp(firstFeature.code), level: 2 })).toBeInTheDocument();
+  });
 });

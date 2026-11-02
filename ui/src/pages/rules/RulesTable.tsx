@@ -1,15 +1,20 @@
 /**
  * A table of rules, used on the Rules page (all rules) and on a feature's page (one feature, one environment).
- * Each row reads as a sentence: "When COUNTRY is TR, the value is true".
+ * Each row reads as a sentence: "When COUNTRY is TR → true". The row's left edge has the status colour (styles.css,
+ * `rule-row`), and switched-off or expired rules are faded, so the rules that count stand out.
+ *
+ * On a feature's page (`showOrder`) the rows are numbered steps, and a last line says what happens when no rule
+ * matches: "Otherwise → false".
  */
-import { ActionIcon, Anchor, Badge, Code, Group, Switch, Table, Text, Tooltip } from '@mantine/core';
-import { IconPencil } from '@tabler/icons-react';
+import { ActionIcon, Anchor, Code, Group, Switch, Table, Text, Tooltip } from '@mantine/core';
+import { IconArrowRight, IconPencil } from '@tabler/icons-react';
 import { Link } from 'react-router-dom';
 import { useDeleteRule, useSetRuleEnabled } from '../../api/rules';
 import type { Rule } from '../../api/types';
-import { RuleStatusBadge } from '../../components/Badges';
+import { EnvironmentBadge, RuleStatusBadge } from '../../components/Badges';
 import { DeleteButton } from '../../components/DeleteButton';
 import { formatDateTime } from '../../utils/dates';
+import { ruleStatus } from '../../utils/rules';
 
 interface RulesTableProps {
   projectId: number;
@@ -19,7 +24,10 @@ interface RulesTableProps {
   showFeature?: boolean;
   /** Show the environment column (off when the rules are already grouped by environment). */
   showEnvironment?: boolean;
-  /** Number the rows 1, 2, 3: the order evaluations check them in (the rules must be sorted that way). */
+  /**
+   * Number the rows 1, 2, 3: the order evaluations check them in (the rules must be sorted that way), and end with
+   * the "Otherwise → false" line.
+   */
   showOrder?: boolean;
 }
 
@@ -27,12 +35,15 @@ export function RulesTable({ projectId, rules, onEdit, showFeature = false, show
   const setEnabled = useSetRuleEnabled(projectId);
   const deleteRule = useDeleteRule(projectId);
 
+  // How many columns the "Otherwise" line spans: everything after the number
+  const columnCount = 7 + (showFeature ? 1 : 0) + (showEnvironment ? 1 : 0);
+
   return (
-    <Table.ScrollContainer minWidth={900}>
-      <Table striped highlightOnHover verticalSpacing="sm">
+    <Table.ScrollContainer minWidth={1100}>
+      <Table highlightOnHover verticalSpacing="sm">
         <Table.Thead>
           <Table.Tr>
-            {showOrder && <Table.Th w={40}>#</Table.Th>}
+            {showOrder && <Table.Th w={56}>Step</Table.Th>}
             {showFeature && <Table.Th>Feature</Table.Th>}
             {showEnvironment && <Table.Th>Environment</Table.Th>}
             <Table.Th>When</Table.Th>
@@ -46,10 +57,11 @@ export function RulesTable({ projectId, rules, onEdit, showFeature = false, show
         </Table.Thead>
         <Table.Tbody>
           {rules.map((rule, index) => (
-            <Table.Tr key={rule.id}>
+            // data-status gives the row its coloured edge (styles.css)
+            <Table.Tr key={rule.id} className="rule-row" data-status={ruleStatus(rule)}>
               {showOrder && (
                 <Table.Td>
-                  <Text c="dimmed">{index + 1}</Text>
+                  <span className="step-number">{index + 1}</span>
                 </Table.Td>
               )}
               {showFeature && (
@@ -61,7 +73,7 @@ export function RulesTable({ projectId, rules, onEdit, showFeature = false, show
               )}
               {showEnvironment && (
                 <Table.Td>
-                  <Badge variant="light">{rule.environmentCode}</Badge>
+                  <EnvironmentBadge code={rule.environmentCode} />
                 </Table.Td>
               )}
               <Table.Td>
@@ -83,7 +95,10 @@ export function RulesTable({ projectId, rules, onEdit, showFeature = false, show
                 )}
               </Table.Td>
               <Table.Td>
-                <ValueText value={rule.featureValue} />
+                <Group gap={6} wrap="nowrap">
+                  <IconArrowRight size={14} color="var(--app-subtle-text)" />
+                  <ValueText value={rule.featureValue} strong />
+                </Group>
               </Table.Td>
               <Table.Td>{rule.priority ?? 0}</Table.Td>
               <Table.Td>
@@ -112,20 +127,52 @@ export function RulesTable({ projectId, rules, onEdit, showFeature = false, show
             </Table.Tr>
           ))}
         </Table.Tbody>
+        {showOrder && (
+          <Table.Tfoot>
+            <Table.Tr className="fallback-row">
+              <Table.Td>
+                <span className="step-number">∗</span>
+              </Table.Td>
+              <Table.Td colSpan={columnCount}>
+                <Group gap={6}>
+                  <Text size="sm" fw={600}>
+                    Otherwise
+                  </Text>
+                  <Text size="sm" c="dimmed">
+                    (no active rule matches the request)
+                  </Text>
+                  <IconArrowRight size={14} color="var(--app-subtle-text)" />
+                  <Code>false</Code>
+                </Group>
+              </Table.Td>
+            </Table.Tr>
+          </Table.Tfoot>
+        )}
       </Table>
     </Table.ScrollContainer>
   );
 }
 
-/** A value in monospace; long values (JSON) are cut short with the full text in a tooltip. */
-function ValueText({ value }: { value: string }) {
-  const short = value.length > 40 ? value.slice(0, 40) + '…' : value;
+/**
+ * A value in monospace; long values (JSON) are cut short with the full text in a tooltip. `strong` colours it, for the
+ * feature's value (the result of the rule).
+ */
+function ValueText({ value, strong = false }: { value: string; strong?: boolean }) {
+  const short = value.length > 32 ? value.slice(0, 32) + '…' : value;
+  const code = (
+    <Code
+      fw={strong ? 600 : undefined}
+      style={strong ? { background: 'var(--mantine-color-brand-light)', color: 'var(--mantine-color-brand-light-color)' } : undefined}
+    >
+      {short}
+    </Code>
+  );
   if (short === value) {
-    return <Code>{value}</Code>;
+    return code;
   }
   return (
     <Tooltip label={value} multiline maw={480}>
-      <Code>{short}</Code>
+      {code}
     </Tooltip>
   );
 }
@@ -139,7 +186,7 @@ function ActivePeriod({ rule }: { rule: Rule }) {
     );
   }
   return (
-    <Text size="sm">
+    <Text size="sm" style={{ whiteSpace: 'nowrap' }}>
       {rule.effectiveFrom ? `from ${formatDateTime(rule.effectiveFrom)}` : ''}
       {rule.effectiveFrom && rule.effectiveTo ? <br /> : null}
       {rule.effectiveTo ? `until ${formatDateTime(rule.effectiveTo)}` : ''}

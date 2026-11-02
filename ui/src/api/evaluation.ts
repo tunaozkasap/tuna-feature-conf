@@ -19,3 +19,33 @@ export async function evaluateFeature(input: EvaluationInput): Promise<Evaluatio
 export function useEvaluateFeature() {
   return useMutation({ mutationFn: evaluateFeature });
 }
+
+/** One environment's answer in a comparison (see `useEvaluateInAllEnvironments`). */
+export interface EnvironmentEvaluation {
+  environmentCode: string;
+  evaluation: Evaluation;
+}
+
+/**
+ * The same request once per environment, to compare: "on in DEV, off in PROD". Sends the requests at the same time
+ * and gives the answers in the order of `environmentCodes`.
+ */
+export async function evaluateInEnvironments(input: EvaluationInput, environmentCodes: string[]): Promise<EnvironmentEvaluation[]> {
+  const calls: Promise<Evaluation>[] = [];
+  for (const environmentCode of environmentCodes) {
+    calls.push(evaluateFeature({ ...input, environmentCode }));
+  }
+  const evaluations = await Promise.all(calls);
+  const results: EnvironmentEvaluation[] = [];
+  for (let i = 0; i < environmentCodes.length; i++) {
+    results.push({ environmentCode: environmentCodes[i], evaluation: evaluations[i] });
+  }
+  return results;
+}
+
+export function useEvaluateInAllEnvironments() {
+  return useMutation({
+    mutationFn: ({ input, environmentCodes }: { input: EvaluationInput; environmentCodes: string[] }) =>
+      evaluateInEnvironments(input, environmentCodes),
+  });
+}

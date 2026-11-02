@@ -10,10 +10,12 @@
     "generate-api": "openapi-typescript http://localhost:8080/api-docs --output src/api/schema.d.ts"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "5.1.0",
     "@mantine/core": "7.15.1",
     "@mantine/form": "7.15.1",
     "@mantine/hooks": "7.15.1",
     "@mantine/notifications": "7.15.1",
+    "@mantine/spotlight": "7.15.1",
     "@tabler/icons-react": "3.24.0",
     "@tanstack/react-query": "5.62.7",
     "react": "18.3.1",

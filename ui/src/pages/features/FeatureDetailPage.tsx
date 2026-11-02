@@ -1,18 +1,23 @@
 /**
- * One feature and its rules, one tab per environment. Inside a tab the rules are listed in the order evaluations
- * check them, so the page answers "what will this feature be in PROD for a given request?" from top to bottom.
+ * One feature and its rules, one tab per environment. Inside a tab the rules are numbered steps in the order
+ * evaluations check them, ending with "Otherwise → false", so the page answers "what will this feature be in PROD for
+ * a given request?" from top to bottom.
+ *
+ * The address can pick the tab: /projects/1/features/7?environment=PROD (the overview's grid links there).
  */
 import { useState } from 'react';
-import { Alert, Anchor, Breadcrumbs, Button, Code, Group, Modal, Tabs, Text } from '@mantine/core';
-import { IconInfoCircle, IconPencil, IconPlayerPlay, IconPlus } from '@tabler/icons-react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Badge, Button, Card, Code, ColorSwatch, Group, Modal, Tabs, Text } from '@mantine/core';
+import { IconPencil, IconPlayerPlay, IconPlus } from '@tabler/icons-react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useEnvironments } from '../../api/environments';
 import { useDeleteFeature, useFeatures } from '../../api/features';
 import { useRules } from '../../api/rules';
 import type { Rule } from '../../api/types';
+import { environmentColor } from '../../components/Badges';
 import { DeleteButton } from '../../components/DeleteButton';
 import { PageHeader } from '../../components/PageHeader';
 import { EmptyState, ErrorAlert, Loading } from '../../components/PageStates';
+import { useProjectBreadcrumbs } from '../../hooks/useProjectBreadcrumbs';
 import { useProjectId } from '../../hooks/useProjectId';
 import { sortInEvaluationOrder } from '../../utils/rules';
 import { RuleForm } from '../rules/RuleForm';
@@ -27,11 +32,15 @@ export function FeatureDetailPage() {
   const rules = useRules(projectId);
   const deleteFeature = useDeleteFeature(projectId);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const featuresLink = `/projects/${projectId}/features`;
+  const feature = features.data?.find((candidate) => candidate.id === featureId);
+  const breadcrumbs = useProjectBreadcrumbs(projectId, { label: 'Features', to: featuresLink }, { label: feature?.code ?? '…' });
 
   const [editingFeature, setEditingFeature] = useState(false);
   // The rule dialog: null = closed, {} = new rule, { rule } = edit it
   const [ruleEditor, setRuleEditor] = useState<{ rule?: Rule } | null>(null);
-  // The selected environment tab (its id as text); the first environment until the user picks one
+  // The selected environment tab (its id as text); until the user picks one: the address's ?environment=, else the first
   const [selectedTab, setSelectedTab] = useState<string | null>(null);
 
   // The tabs count rules and say "No rules in PROD", so the page waits for the rules too
@@ -40,28 +49,24 @@ export function FeatureDetailPage() {
   if (environments.isError) return <ErrorAlert error={environments.error} />;
   if (rules.isError) return <ErrorAlert error={rules.error} />;
 
-  const feature = features.data.find((candidate) => candidate.id === featureId);
   if (!feature) {
     return <EmptyState title="Feature not found" description="It may have been deleted." />;
   }
 
   const featureRules = (rules.data ?? []).filter((rule) => rule.featureId === feature.id);
-  const tab = selectedTab ?? (environments.data[0] ? String(environments.data[0].id) : null);
-  const featuresLink = `/projects/${projectId}/features`;
+  const fromAddress = environments.data.find((environment) => environment.code === searchParams.get('environment'));
+  const firstEnvironment = fromAddress ?? environments.data[0];
+  const tab = selectedTab ?? (firstEnvironment ? String(firstEnvironment.id) : null);
 
   return (
     <>
-      <Breadcrumbs mb="sm">
-        <Anchor component={Link} to={featuresLink} size="sm">
-          Features
-        </Anchor>
-        <Text size="sm">{feature.code}</Text>
-      </Breadcrumbs>
-
       <PageHeader
+        breadcrumbs={breadcrumbs}
         title={
           <Group gap="sm">
-            <Code fz="xl">{feature.code}</Code>
+            <Code fz={22} fw={700} px="sm" py={4}>
+              {feature.code}
+            </Code>
             <span>{feature.name}</span>
           </Group>
         }
@@ -102,13 +107,20 @@ export function FeatureDetailPage() {
           }
         />
       ) : (
-        <Tabs value={tab} onChange={setSelectedTab} keepMounted={false}>
-          <Tabs.List mb="md">
+        <Tabs value={tab} onChange={setSelectedTab} keepMounted={false} variant="pills" radius="md">
+          <Tabs.List mb="lg">
             {environments.data.map((environment) => {
               const count = featureRules.filter((rule) => rule.environmentId === environment.id).length;
               return (
-                <Tabs.Tab key={environment.id} value={String(environment.id)}>
-                  {environment.code} ({count})
+                <Tabs.Tab
+                  key={environment.id}
+                  value={String(environment.id)}
+                  leftSection={<ColorSwatch size={10} color={`var(--mantine-color-${environmentColor(environment.code)}-6)`} withShadow={false} />}
+                >
+                  {environment.code}{' '}
+                  <Text span size="xs" fw={600} opacity={0.7}>
+                    ({count})
+                  </Text>
                 </Tabs.Tab>
               );
             })}
@@ -118,29 +130,33 @@ export function FeatureDetailPage() {
             const inEnvironment = sortInEvaluationOrder(featureRules.filter((rule) => rule.environmentId === environment.id));
             return (
               <Tabs.Panel key={environment.id} value={String(environment.id)}>
-                <Group justify="space-between" mb="sm">
-                  <Text size="sm" c="dimmed">
-                    {environment.name}
-                    {environment.description ? ` · ${environment.description}` : ''}
-                  </Text>
-                  <Button size="xs" leftSection={<IconPlus size={14} />} onClick={() => setRuleEditor({})}>
-                    Add rule in {environment.code}
-                  </Button>
-                </Group>
-                {inEnvironment.length === 0 ? (
-                  <EmptyState
-                    title={`No rules in ${environment.code}`}
-                    description={`Every request in ${environment.code} gets the default value, false.`}
-                  />
-                ) : (
-                  <>
-                    <Alert icon={<IconInfoCircle />} variant="light" color="gray" mb="sm">
-                      Checked from top to bottom. The first active rule whose value matches the request decides the
-                      value; when none matches, the value is <Code>false</Code>.
-                    </Alert>
+                <Card padding={0}>
+                  <Group justify="space-between" p="md" wrap="nowrap">
+                    <div>
+                      <Group gap="xs">
+                        <Text fw={600}>{environment.name}</Text>
+                        <Badge variant="light" color="gray">
+                          {inEnvironment.length === 0 ? 'no rules' : `checked top to bottom`}
+                        </Badge>
+                      </Group>
+                      <Text size="sm" c="dimmed">
+                        {environment.description ||
+                          'The first active rule whose value matches the request decides the value; when none matches, the value is false.'}
+                      </Text>
+                    </div>
+                    <Button size="sm" leftSection={<IconPlus size={16} />} onClick={() => setRuleEditor({})}>
+                      Add rule in {environment.code}
+                    </Button>
+                  </Group>
+                  {inEnvironment.length === 0 ? (
+                    <EmptyState
+                      title={`No rules in ${environment.code}`}
+                      description={`Every request in ${environment.code} gets the default value, false.`}
+                    />
+                  ) : (
                     <RulesTable projectId={projectId} rules={inEnvironment} onEdit={(rule) => setRuleEditor({ rule })} showOrder />
-                  </>
-                )}
+                  )}
+                </Card>
               </Tabs.Panel>
             );
           })}

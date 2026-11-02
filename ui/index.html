@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Feature Configuration</title>
+    <!--
+      Sets the light/dark colour scheme before React starts, so a dark-mode user doesn't see a white flash.
+      It does what Mantine's <ColorSchemeScript defaultColorScheme="auto" /> does: the saved choice, else the OS setting.
+    -->
+    <script>
+      try {
+        var saved = window.localStorage.getItem('mantine-color-scheme-value');
+        var scheme = saved === 'light' || saved === 'dark' ? saved : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-mantine-color-scheme', scheme);
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

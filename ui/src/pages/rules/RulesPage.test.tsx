@@ -71,4 +71,39 @@ describe('RulesPage', () => {
     expect(await screen.findByText('1 of 2 rules')).toBeInTheDocument();
     expect(shownConditions()).toEqual([`${qualifier.code}isNL`]);
   });
+
+  test('a status button filters by that status; pressing it again shows all', async () => {
+    const { project, environment, qualifier, feature } = await createTestSetup();
+    const base = { featureId: feature.id, environmentId: environment.id, qualifierId: qualifier.id };
+    await createTestRule({ ...base, qualifierValue: 'on' });
+    await createTestRule({ ...base, qualifierValue: 'off', enabled: false });
+    const { user } = renderPage(`/projects/${project.id}/rules`);
+    expect(await screen.findByText('2 of 2 rules')).toBeInTheDocument();
+
+    const disabled = screen.getByRole('button', { name: 'Show only disabled rules' });
+    expect(disabled).toHaveTextContent('Disabled1');
+    await user.click(disabled);
+
+    expect(await screen.findByText('1 of 2 rules')).toBeInTheDocument();
+    expect(shownConditions()).toEqual([`${qualifier.code}isoff`]);
+    expect(screen.getByRole('textbox', { name: 'Status' })).toHaveValue('Disabled');
+
+    await user.click(disabled);
+    expect(await screen.findByText('2 of 2 rules')).toBeInTheDocument();
+  });
+
+  test('"Clear filters" resets every filter', async () => {
+    const { project, environment, qualifier, feature } = await createTestSetup();
+    await createTestRule({ featureId: feature.id, environmentId: environment.id, qualifierId: qualifier.id, qualifierValue: 'DE' });
+    const { user } = renderPage(`/projects/${project.id}/rules`);
+    expect(await screen.findByText('1 of 1 rules')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
+
+    await user.type(screen.getByRole('textbox', { name: 'Search' }), 'nothing-like-this');
+    expect(await screen.findByText('0 of 1 rules')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }));
+
+    expect(await screen.findByText('1 of 1 rules')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Search' })).toHaveValue('');
+  });
 });

@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { describe, expect, test } from 'vitest';
 import { waitForEvidence } from '../../../test/evidence';
 import { createTestEnvironment, createTestRule, createTestSetup, renderPage } from '../../../test/render';
@@ -78,5 +78,30 @@ describe('EvaluatePage', () => {
     renderPage(`/projects/${project.id}/evaluate`);
 
     expect(await screen.findByRole('button', { name: 'Evaluate' })).toBeDisabled();
+  });
+
+  test('compares the value across every environment of the project', async () => {
+    const { project, environment: withRule, qualifier, feature } = await createEvaluationSetup();
+    const { user } = renderPage(`/projects/${project.id}/evaluate?feature=${encodeURIComponent(feature.code)}`);
+
+    await user.type(await screen.findByRole('textbox', { name: `${qualifier.code} — ${qualifier.name}` }), 'NL');
+    await user.click(screen.getByRole('button', { name: 'Compare across environments' }));
+
+    const table = (await screen.findByRole('heading', { name: 'Across environments' })).closest('div')!;
+    const rows = within(table).getAllByRole('row').slice(1);
+    // createTestSetup's environment first (no rules there), then the one with the rule
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent('falsedefault value');
+    expect(rows[1]).toHaveTextContent(withRule.code);
+    expect(rows[1]).toHaveTextContent(/^.*on.*rule #\d+ \(/);
+  });
+
+  test('shows the request as a curl command', async () => {
+    const { project, feature } = await createEvaluationSetup();
+    const { user } = renderPage(`/projects/${project.id}/evaluate?feature=${encodeURIComponent(feature.code)}`);
+
+    await user.click(await screen.findByRole('tab', { name: 'curl' }));
+
+    expect(screen.getByText(/^curl -X POST/, { selector: 'pre' })).toHaveTextContent(`"featureCode":"${feature.code}"`);
   });
 });

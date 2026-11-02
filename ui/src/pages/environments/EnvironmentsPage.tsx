@@ -3,14 +3,16 @@
  * be on in DEV and off in PROD. The table shows how many rules each environment has.
  */
 import { useState } from 'react';
-import { ActionIcon, Badge, Button, Group, Modal, Table, Text, Tooltip } from '@mantine/core';
+import { ActionIcon, Button, Card, Group, Modal, Table, Text, Tooltip } from '@mantine/core';
 import { IconPencil, IconPlus } from '@tabler/icons-react';
 import { useDeleteEnvironment, useEnvironments } from '../../api/environments';
 import { useRules } from '../../api/rules';
 import type { Environment } from '../../api/types';
+import { EnvironmentBadge } from '../../components/Badges';
 import { DeleteButton } from '../../components/DeleteButton';
 import { PageHeader } from '../../components/PageHeader';
 import { EmptyState, ErrorAlert, Loading } from '../../components/PageStates';
+import { useProjectBreadcrumbs } from '../../hooks/useProjectBreadcrumbs';
 import { useProjectId } from '../../hooks/useProjectId';
 import { EnvironmentForm } from './EnvironmentForm';
 
@@ -19,6 +21,7 @@ export function EnvironmentsPage() {
   const environments = useEnvironments(projectId);
   const rules = useRules(projectId);
   const deleteEnvironment = useDeleteEnvironment(projectId);
+  const breadcrumbs = useProjectBreadcrumbs(projectId, { label: 'Environments' });
   // The form dialog: null = closed, {} = new environment, { environment } = edit it
   const [editor, setEditor] = useState<{ environment?: Environment } | null>(null);
 
@@ -35,6 +38,7 @@ export function EnvironmentsPage() {
   return (
     <>
       <PageHeader
+        breadcrumbs={breadcrumbs}
         title="Environments"
         description="Where the application runs. Every rule belongs to one environment, and an evaluation request names the environment it runs in."
         actions={newButton}
@@ -49,50 +53,52 @@ export function EnvironmentsPage() {
       )}
 
       {environments.data && rules.data && environments.data.length > 0 && (
-        <Table striped highlightOnHover verticalSpacing="sm">
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Code</Table.Th>
-              <Table.Th>Name</Table.Th>
-              <Table.Th>Description</Table.Th>
-              <Table.Th>Rules</Table.Th>
-              <Table.Th w={90} />
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {environments.data.map((environment) => {
-              const count = ruleCount(environment.id);
-              return (
-                <Table.Tr key={environment.id}>
-                  <Table.Td>
-                    <Badge variant="light">{environment.code}</Badge>
-                  </Table.Td>
-                  <Table.Td>{environment.name}</Table.Td>
-                  <Table.Td>
-                    <Text size="sm" c="dimmed">
-                      {environment.description}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>{count}</Table.Td>
-                  <Table.Td>
-                    <Group gap={4} wrap="nowrap">
-                      <Tooltip label="Edit">
-                        <ActionIcon variant="subtle" aria-label={`Edit environment ${environment.code}`} onClick={() => setEditor({ environment })}>
-                          <IconPencil size={18} />
-                        </ActionIcon>
-                      </Tooltip>
-                      <DeleteButton
-                        what={`environment ${environment.code}`}
-                        warning={count > 0 ? `It still has ${count} rule(s); delete them first.` : undefined}
-                        onConfirm={() => deleteEnvironment.mutateAsync(environment.id)}
-                      />
-                    </Group>
-                  </Table.Td>
-                </Table.Tr>
-              );
-            })}
-          </Table.Tbody>
-        </Table>
+        <Card padding={0}>
+          <Table verticalSpacing="sm" horizontalSpacing="md">
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Code</Table.Th>
+                <Table.Th>Name</Table.Th>
+                <Table.Th>Description</Table.Th>
+                <Table.Th>Rules</Table.Th>
+                <Table.Th w={90} />
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {environments.data.map((environment) => {
+                const count = ruleCount(environment.id);
+                return (
+                  <Table.Tr key={environment.id}>
+                    <Table.Td>
+                      <EnvironmentBadge code={environment.code} size="lg" />
+                    </Table.Td>
+                    <Table.Td>{environment.name}</Table.Td>
+                    <Table.Td>
+                      <Text size="sm" c="dimmed">
+                        {environment.description}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>{count}</Table.Td>
+                    <Table.Td>
+                      <Group gap={4} wrap="nowrap">
+                        <Tooltip label="Edit">
+                          <ActionIcon variant="subtle" aria-label={`Edit environment ${environment.code}`} onClick={() => setEditor({ environment })}>
+                            <IconPencil size={18} />
+                          </ActionIcon>
+                        </Tooltip>
+                        <DeleteButton
+                          what={`environment ${environment.code}`}
+                          warning={count > 0 ? `It still has ${count} rule(s); delete them first.` : undefined}
+                          onConfirm={() => deleteEnvironment.mutateAsync(environment.id)}
+                        />
+                      </Group>
+                    </Table.Td>
+                  </Table.Tr>
+                );
+              })}
+            </Table.Tbody>
+          </Table>
+        </Card>
       )}
 
       <Modal opened={editor !== null} onClose={() => setEditor(null)} title={editor?.environment ? 'Edit environment' : 'New environment'}>

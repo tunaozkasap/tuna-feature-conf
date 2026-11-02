@@ -44,9 +44,12 @@ walks through how one screen loads and saves. Use this stack and build setup; do
   can be traced to its evidence line. `queryClient.ts` does this for every failed save.
 - **Logic mirrored from Java:** `ui/src/utils/rules.ts` repeats `FeatureRuleEntity.isEffective` (rule status) and
   `EvaluationService.EVALUATION_ORDER`; change both sides together.
-- **Screens:** projects, project overview (counts, features × environments grid, starting and ending soon),
-  features, feature detail (rules per environment in evaluation order), rules (all, with filters), evaluation tester,
-  environments and qualifiers. The table of addresses is at the top of `ui/src/App.tsx`.
+- **Screens:** projects, project overview (get-started steps, counts, features × environments grid, starting and
+  ending soon), features, feature detail (rules per environment as numbered steps in evaluation order), rules (all,
+  with filters), evaluation tester (with a comparison across environments), environments and qualifiers. The table of
+  addresses is at the top of `ui/src/App.tsx`; Ctrl+K opens a search window over screens, features and projects.
+- **Look:** colours and component defaults in `ui/src/theme.ts`, the rest in `ui/src/styles.css`; light and dark
+  mode (follows the OS, toggle in the header). Keep new screens on those (cards, `brand` colour, `EnvironmentBadge`).
 
 Build integration:
 
